@@ -1,0 +1,70 @@
+/**
+ * Framework-agnostic representation of a CLI's public surface. Every
+ * adapter (Commander today, Yargs/Clap/Cobra later) normalizes whatever
+ * that framework exposes internally into exactly these shapes - the
+ * diff engine and the `.cliguard/contract.json` file on disk never know
+ * which framework produced a Contract.
+ */
+
+/** How a captured option carries its value, as declared by the framework - never guessed from parsing text. */
+export type OptionValueType = "boolean" | "string";
+
+export interface OptionContract {
+  /** Raw flag declaration as the framework received it, e.g. "-o, --output <path>". Informational only - never diffed directly. */
+  readonly flags: string;
+  /** Normalized long-form name with no leading dashes, e.g. "output". This is the diff key. */
+  readonly name: string;
+  /** Short forms / synonyms, e.g. ["-o"]. Order is not significant. */
+  readonly aliases: readonly string[];
+  readonly description: string;
+  /** True for a mandatory option (e.g. Commander's requiredOption). */
+  readonly required: boolean;
+  readonly valueType: OptionValueType;
+  /** True if the option can be passed more than once / collects multiple values. */
+  readonly variadic: boolean;
+  /** JSON-serializable default, or null if the framework declared none. */
+  readonly defaultValue: unknown;
+}
+
+export interface ArgumentContract {
+  /** Positional argument name, e.g. "file" from "<file>" or "[file]". */
+  readonly name: string;
+  readonly required: boolean;
+  readonly variadic: boolean;
+  readonly description: string;
+}
+
+export interface CommandContract {
+  readonly name: string;
+  readonly description: string;
+  readonly aliases: readonly string[];
+  readonly options: readonly OptionContract[];
+  readonly arguments: readonly ArgumentContract[];
+  readonly subcommands: readonly CommandContract[];
+}
+
+/**
+ * The full committed shape of `.cliguard/contract.json`. `contractVersion`
+ * is this *format's* own schema version (bumped only if we change what a
+ * Contract can express), never the target CLI's version.
+ */
+export interface Contract {
+  readonly contractVersion: 1;
+  /** Identifier of the adapter that produced this contract, e.g. "commander". */
+  readonly adapter: string;
+  /** ISO-8601 capture timestamp. Informational only - excluded from diffing. */
+  readonly capturedAt: string;
+  readonly root: CommandContract;
+}
+
+/** Severity of a single detected difference between two contracts. */
+export enum ChangeType {
+  /** Removes or narrows something a caller may already depend on. */
+  BREAKING = "BREAKING",
+  /** Purely additive - existing callers are unaffected. */
+  ADDITIVE = "ADDITIVE",
+  /** Cosmetic only (help text, alias reordering with no collision). */
+  PATCH = "PATCH",
+  /** No difference at all. Not expected to appear in a diff result list. */
+  NONE = "NONE",
+}

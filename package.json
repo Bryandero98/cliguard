@@ -1,0 +1,46 @@
+{
+  "name": "cliguard",
+  "version": "0.1.0",
+  "description": "Snapshot-tests your CLI's contract (commands, flags, defaults) so you never ship a breaking change by accident.",
+  "keywords": ["cli", "contract-testing", "snapshot-testing", "commander", "ci"],
+  "author": "Bryandero98",
+  "license": "MIT",
+  "homepage": "https://github.com/Bryandero98/cliguard",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Bryandero98/cliguard.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Bryandero98/cliguard/issues"
+  },
+  "bin": {
+    "cliguard": "./dist/bin.js"
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc",
+    "lint": "eslint src --ext .ts",
+    "lint:fix": "eslint src --ext .ts --fix",
+    "format": "prettier --write \"src/**/*.ts\"",
+    "test": "jest",
+    "test:watch": "jest --watch"
+  },
+  "dependencies": {
+    "commander": "^12.1.0"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.13",
+    "@types/node": "^22.7.4",
+    "@typescript-eslint/eslint-plugin": "^8.8.0",
+    "@typescript-eslint/parser": "^8.8.0",
+    "eslint": "^8.57.1",
+    "eslint-config-prettier": "^9.1.0",
+    "jest": "^29.7.0",
+    "prettier": "^3.3.3",
+    "ts-jest": "^29.2.5",
+    "typescript": "^5.6.2"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

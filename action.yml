@@ -1,0 +1,17 @@
+name: "cliguard"
+description: "Snapshot-tests your CLI's contract so you never ship a breaking change by accident."
+author: "Bryandero98"
+branding:
+  icon: "shield"
+  color: "red"
+
+inputs:
+  entry:
+    description: "Path to the target CLI's entry file"
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - run: npx cliguard check ${{ inputs.entry }}
+      shell: bash
