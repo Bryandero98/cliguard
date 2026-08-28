@@ -115,6 +115,13 @@ Extracting a contract runs the target entry file's own top-level code, the same 
 
 The CLI and core diffing engine are, and will stay, free and open-source. Planned next: a hosted add-on for teams that want more than a CI exit code - a dashboard with the history of contract changes across releases, and Slack/webhook alerts the moment a breaking change lands. See [issue: Webhook reporter for SaaS integration](https://github.com/Bryandero98/cliguard/issues) for the first building block.
 
+## Support this project
+
+cliguard is free and will stay free. If it's saving you from a broken release, a small tip helps keep it going:
+
+- **Ko-fi:** [ko-fi.com/bryandero98](https://ko-fi.com/bryandero98)
+- **USDT (TRC20):** `TEG4Kk2qXYMQ4mHNd7dPhSPRyT14CGr2or` — double-check the network is set to **TRC20** before sending; a transfer on the wrong network can't be recovered.
+
 ## Contributing
 
 See [CONTRIBUTING.md](./CONTRIBUTING.md).

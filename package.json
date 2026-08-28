@@ -13,6 +13,7 @@
   "bugs": {
     "url": "https://github.com/Bryandero98/cliguard/issues"
   },
+  "funding": "https://ko-fi.com/bryandero98",
   "bin": {
     "cliguard": "dist/bin.js"
   },
