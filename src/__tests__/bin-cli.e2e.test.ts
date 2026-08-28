@@ -37,7 +37,7 @@ describe("cliguard CLI (subprocess)", () => {
       expect(runCli(dir, ["init", FIXTURE]).status).toBe(0);
       const { status, output } = runCli(dir, ["check", FIXTURE]);
       expect(status).toBe(0);
-      expect(output).toContain("El contrato de la CLI está intacto.");
+      expect(output).toContain("CLI contract is intact.");
     } finally {
       cleanup();
     }
@@ -103,7 +103,7 @@ describe("cliguard CLI (subprocess)", () => {
 
       const updateResult = runCli(dir, ["update", fixture.path]);
       expect(updateResult.status).toBe(0);
-      expect(updateResult.output).toContain("Contrato de CLI actualizado con éxito");
+      expect(updateResult.output).toContain("CLI contract updated successfully");
 
       // Now that the committed contract matches the modified fixture,
       // checking against it again must be clean - proves update
@@ -111,7 +111,7 @@ describe("cliguard CLI (subprocess)", () => {
       // success.
       const { status, output } = runCli(dir, ["check", fixture.path]);
       expect(status).toBe(0);
-      expect(output).toContain("El contrato de la CLI está intacto.");
+      expect(output).toContain("CLI contract is intact.");
     } finally {
       cleanup();
       fixture.cleanup();

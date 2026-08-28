@@ -58,13 +58,13 @@ program
   .option(...adapterOption)
   .action(async (entry: string, options: { adapter: string }) => {
     if (contractExists()) {
-      console.warn(`El contrato ya existe. Usa "cliguard update" para sobrescribirlo.`);
+      console.warn(`A contract already exists. Run "cliguard update" to overwrite it.`);
       process.exit(1);
     }
 
     const contract = await resolveAdapter(options.adapter).extract(entry);
     writeContract(contract);
-    console.log(`✅ Contrato de CLI inicializado con éxito en ${getContractDisplayPath()}.`);
+    console.log(`✅ CLI contract initialized successfully at ${getContractDisplayPath()}.`);
   });
 
 program
@@ -78,7 +78,7 @@ program
     const diff = diffEngine.compare(oldContract, newContract);
 
     if (diff.length === 0) {
-      console.log("✅ El contrato de la CLI está intacto.");
+      console.log("✅ CLI contract is intact.");
       process.exit(0);
     }
 
@@ -96,7 +96,7 @@ program
   .action(async (entry: string, options: { adapter: string }) => {
     const contract = await resolveAdapter(options.adapter).extract(entry);
     writeContract(contract);
-    console.log("🔄 Contrato de CLI actualizado con éxito.");
+    console.log("🔄 CLI contract updated successfully.");
   });
 
 function printDiff(diff: readonly DiffResult[]): void {
