@@ -14,12 +14,16 @@ import { ChangeType } from "./core/types";
 const adapter = new CommanderAdapter();
 const diffEngine = new DiffEngine();
 
+// eslint-disable-next-line @typescript-eslint/no-require-imports -- package.json has no type declarations to import against; require() is the simplest correct read here
+const packageJson = require("../package.json") as { version: string };
+
 const program = new Command();
 program
   .name("cliguard")
   .description(
     "Snapshot-tests your CLI's contract so you never ship a breaking change by accident.",
-  );
+  )
+  .version(packageJson.version);
 
 program
   .command("init")
