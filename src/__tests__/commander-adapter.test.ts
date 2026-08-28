@@ -60,4 +60,23 @@ describe("CommanderAdapter", () => {
     const notACli = path.join(__dirname, "..", "__fixtures__", "not-a-cli.js");
     await expect(adapter.extract(notACli)).rejects.toThrow(/no Commander\.js Command instance/);
   });
+
+  it("throws a distinct, non-misleading error when the entry file doesn't exist", async () => {
+    const adapter = new CommanderAdapter();
+    const missing = path.join(__dirname, "..", "__fixtures__", "does-not-exist.js");
+    await expect(adapter.extract(missing)).rejects.toThrow(/no such file/);
+    // Must NOT be mistaken for "loaded fine, wrong export shape" - that's
+    // a different failure with a different fix (add an export), while
+    // this one's fix is a path typo.
+    await expect(adapter.extract(missing)).rejects.not.toThrow(/Command instance found/);
+  });
+
+  // Genuine-ESM target CLIs (esm-cli.mjs, esm-top-level-await-cli.mjs) are
+  // covered in esm-target-cli.e2e.test.ts, not here: loading them needs a
+  // real dynamic import(), and Jest's own VM sandbox intercepts that
+  // in-process ("A dynamic import callback was invoked without
+  // --experimental-vm-modules") in a way that has nothing to do with
+  // whether the adapter itself works. Spawning the built CLI as a real
+  // subprocess sidesteps Jest's sandbox and tests the actual shipped
+  // artifact instead.
 });

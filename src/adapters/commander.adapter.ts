@@ -1,4 +1,6 @@
+import { existsSync } from "fs";
 import { resolve } from "path";
+import { pathToFileURL } from "url";
 
 import { Command, type Option } from "commander";
 
@@ -10,6 +12,24 @@ import type {
   OptionValueType,
 } from "../core/types";
 import type { CliAdapter } from "./adapter.interface";
+
+/**
+ * A genuine dynamic `import()`, immune to TypeScript's own rewriting.
+ * This project builds with `module: "commonjs"` (required for the CLI's
+ * own require()-based entrypoint), and under that setting tsc rewrites a
+ * literal `import()` expression into `Promise.resolve().then(() =>
+ * require(...))` - so a plain `import(absolutePath)` below would compile
+ * to `require()` in disguise, never a real ESM load, no matter how the
+ * source reads. That silently breaks on any target CLI that's genuine
+ * ESM with no synchronous CommonJS-compatible form (e.g. one with a
+ * top-level `await`) on any Node version that doesn't support requiring
+ * an ESM graph. Constructing the function from a string hides the
+ * `import()` call from tsc's static analysis, so this is Node's actual
+ * dynamic import at runtime.
+ */
+const dynamicImport = new Function("specifier", "return import(specifier)") as (
+  specifier: string,
+) => Promise<unknown>;
 
 /**
  * Commander doesn't expose positional arguments the same way across major
@@ -53,7 +73,25 @@ export class CommanderAdapter implements CliAdapter {
     // dist/, silently loading the wrong (or no) file.
     const absolutePath = resolve(process.cwd(), entryPath);
 
-    const viaImport = await this.tryLoad(() => import(absolutePath));
+    // Checked up front so the error below can tell "the file doesn't
+    // exist" apart from "it exists but doesn't export a Command" - both
+    // import() and require() otherwise fail the same opaque way for a
+    // missing file, and the generic message ("no Command instance
+    // found") reads as if the file loaded fine and just exported the
+    // wrong thing, which is actively misleading when it never loaded at
+    // all. Exact-path only, by design: entryPath is documented as a path
+    // to a specific entry file, not a resolvable module specifier, so
+    // this never has to account for extension-less or directory-index
+    // resolution.
+    if (!existsSync(absolutePath)) {
+      throw new Error(`cliguard: no such file: "${absolutePath}".`);
+    }
+
+    // Dynamic import() requires a file:// URL for an absolute filesystem
+    // path on Windows - a raw "C:\foo\bar.js" parses as a URL with scheme
+    // "c:" and throws ERR_UNSUPPORTED_ESM_URL_SCHEME. pathToFileURL is a
+    // no-op in effect on POSIX (still produces a valid file:// URL there).
+    const viaImport = await this.tryLoad(() => dynamicImport(pathToFileURL(absolutePath).href));
     if (viaImport) return viaImport;
 
     // eslint-disable-next-line @typescript-eslint/no-require-imports -- deliberate fallback for target CLIs that aren't import()-able
