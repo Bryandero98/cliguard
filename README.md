@@ -23,7 +23,7 @@ The first line fails your CI. The second one doesn't - `--dry-run` is new and op
 npm install --save-dev cliguard
 ```
 
-Your CLI's entry file needs to **export** its Commander `Command` instance instead of calling `.parse()` itself:
+Your CLI's entry file should **export** its Commander `Command` instance instead of calling `.parse()` itself - the cleanest way to adopt cliguard, since it never risks running any of your CLI's real logic:
 
 ```js
 // bin/cli.js
@@ -55,6 +55,16 @@ npx cliguard init ./bin/cli.js --adapter cac
 ```
 
 `cac` itself is an optional dependency of cliguard - only installed if you actually use `--adapter cac`.
+
+### Entry files that build the CLI lazily
+
+Not every real CLI exports its instance - plenty build it inside a function that only runs when something actually calls it, or just never had a reason to export it. Pointing cliguard straight at a file like that would fail with "no instance found" under the rule above alone.
+
+So when the direct export lookup finds nothing, cliguard tries one more thing automatically, no flag needed: it patches the exact copy of `commander`/`cac` your entry file will itself `require()`, so any `new Command()` (or CAC's `cac()`) call anywhere in your file's own top-level code is captured - even though nothing was ever exported. This covers most real CLIs, since even ones that never bother exporting still build (and often `.parse()`) at the top of their own file as a matter of course.
+
+It can't reach an instance built strictly *inside* a function that's only invoked later, never automatically at load time (a `main()` some other file calls, not the file cliguard is pointed at) - there's no safe, generic way for cliguard to know which function to call or with what arguments. For that shape, write a small wrapper file that reaches into the target's own internals to get (or construct) the instance, and point cliguard at the wrapper instead of the original entry file. The exact shape of that wrapper is inherently project-specific - it's standing in for whatever that project's own entry point would otherwise do - but the command stays the same either way: `cliguard init ./your-wrapper.mjs`.
+
+Either way, if the target's top-level code has its own real side effects when loaded - a `.parse()` call that matches a real command and runs it, a network request, spawning a process - running cliguard against it (directly or through a wrapper) triggers those too, exactly as `node ./bin/cli.js` would. cliguard neutralizes one specific danger this creates (a target calling `process.exit()` can't kill cliguard's own process or override its exit code), but doesn't sandbox anything else - see [SECURITY.md](./SECURITY.md).
 
 Then:
 

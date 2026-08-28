@@ -22,6 +22,19 @@ In practice this means:
 - cliguard itself never executes network requests, writes outside
   `.cliguard/contract.json`, or shells out to anything other than the
   target entry file's own top-level code.
+- If a direct export lookup finds nothing, cliguard tries one more thing
+  before giving up: it patches the target's own `commander`/`cac`
+  install (resolved from the target file's location, not cliguard's) so
+  that a `new Command()` or `cac()` call anywhere in the target's
+  top-level code is captured, even when the target never exports the
+  result. This doesn't run anything the target wasn't already going to
+  run on its own - it only observes construction as a side effect of
+  code that executes either way. It also means more of a target's real
+  startup path can run than a plain export lookup alone would ever
+  reach, including a `.parse()`/`.run()` call some CLIs make eagerly -
+  cliguard neutralizes the one sharp edge that creates (a target calling
+  `process.exit()` can't kill cliguard's own process or override its
+  exit code), but doesn't sandbox anything else the target's code does.
 
 ## Reporting a vulnerability
 

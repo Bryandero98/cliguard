@@ -7,6 +7,7 @@ type CacOption = CacCommand["options"][number];
 
 import type { CommandContract, Contract, OptionContract, OptionValueType } from "../core/types";
 import type { CliAdapter } from "./adapter.interface";
+import { captureConstructions } from "./construction-capture";
 import { loadModule } from "./load-module";
 
 /**
@@ -39,8 +40,17 @@ export class CacAdapter implements CliAdapter {
   }
 
   private async loadCac(entryPath: string): Promise<CAC> {
+    // See CommanderAdapter.loadCommand's identical block: patched before
+    // the target loads, so a `new CAC()` or `cac()` call anywhere in its
+    // own top-level code gets captured even if the target never exports
+    // the result.
+    const captured = captureConstructions("cac", entryPath, "CAC", ["cac"]);
+
     const { viaImport, viaRequire } = await loadModule(entryPath);
-    const cli = this.findCac(viaImport.moduleExports) ?? this.findCac(viaRequire.moduleExports);
+    const cli =
+      this.findCac(viaImport.moduleExports) ??
+      this.findCac(viaRequire.moduleExports) ??
+      this.pickBestCandidate(captured);
     if (cli) return cli;
 
     // See CommanderAdapter's identical block for why both real errors -
@@ -48,9 +58,26 @@ export class CacAdapter implements CliAdapter {
     throw new Error(
       `cliguard: no CAC instance found in "${entryPath}". ` +
         "Export it as `export default cli`, `module.exports = cli`, " +
-        "or a named export (e.g. `export const cli = cac()`).\n" +
+        "or a named export (e.g. `export const cli = cac()`). If the file builds its " +
+        "CAC instance inside a function that only runs when something calls it (never " +
+        "at the top level), point cliguard at a small wrapper file that calls that " +
+        "function and exports the result instead - see the README's \"Entry files that " +
+        'build the CLI lazily" section.\n' +
         `  import() failed: ${viaImport.error ?? "module loaded, but exported no CAC instance"}\n` +
         `  require() failed: ${viaRequire.error ?? "module loaded, but exported no CAC instance"}`,
+    );
+  }
+
+  /** Among every CAC instance captured during construction, the one that looks most like the real, fully-built root CLI. */
+  private pickBestCandidate(candidates: readonly unknown[]): CAC | undefined {
+    const valid = candidates.filter((candidate): candidate is CAC => this.looksLikeCac(candidate));
+    if (valid.length === 0) return undefined;
+
+    return valid.reduce((best, candidate) =>
+      candidate.commands.length + candidate.globalCommand.options.length >
+      best.commands.length + best.globalCommand.options.length
+        ? candidate
+        : best,
     );
   }
 

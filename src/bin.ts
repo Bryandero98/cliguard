@@ -62,9 +62,13 @@ program
       process.exit(1);
     }
 
-    const contract = await resolveAdapter(options.adapter).extract(entry);
-    writeContract(contract);
-    console.log(`✅ CLI contract initialized successfully at ${getContractDisplayPath()}.`);
+    const exitCode = await withSuppressedExit(async () => {
+      const contract = await resolveAdapter(options.adapter).extract(entry);
+      writeContract(contract);
+      console.log(`✅ CLI contract initialized successfully at ${getContractDisplayPath()}.`);
+      return 0;
+    });
+    process.exit(exitCode);
   });
 
 program
@@ -74,23 +78,26 @@ program
   .option(...adapterOption)
   .option("--json", "print a machine-readable JSON result instead of text", false)
   .action(async (entry: string, options: { adapter: string; json: boolean }) => {
-    const oldContract = readContract();
-    const newContract = await resolveAdapter(options.adapter).extract(entry);
-    const diff = diffEngine.compare(oldContract, newContract);
-    const hasBreaking = diff.some((entry) => entry.type === ChangeType.BREAKING);
+    const exitCode = await withSuppressedExit(async () => {
+      const oldContract = readContract();
+      const newContract = await resolveAdapter(options.adapter).extract(entry);
+      const diff = diffEngine.compare(oldContract, newContract);
+      const hasBreaking = diff.some((entry) => entry.type === ChangeType.BREAKING);
 
-    if (options.json) {
-      console.log(JSON.stringify(toJsonResult(diff), null, 2));
-      process.exit(hasBreaking ? 1 : 0);
-    }
+      if (options.json) {
+        console.log(JSON.stringify(toJsonResult(diff), null, 2));
+        return hasBreaking ? 1 : 0;
+      }
 
-    if (diff.length === 0) {
-      console.log("✅ CLI contract is intact.");
-      process.exit(0);
-    }
+      if (diff.length === 0) {
+        console.log("✅ CLI contract is intact.");
+        return 0;
+      }
 
-    printDiff(diff);
-    process.exit(hasBreaking ? 1 : 0);
+      printDiff(diff);
+      return hasBreaking ? 1 : 0;
+    });
+    process.exit(exitCode);
   });
 
 program
@@ -99,10 +106,45 @@ program
   .argument("<entry>", "path to the target CLI's entry file")
   .option(...adapterOption)
   .action(async (entry: string, options: { adapter: string }) => {
-    const contract = await resolveAdapter(options.adapter).extract(entry);
-    writeContract(contract);
-    console.log("🔄 CLI contract updated successfully.");
+    const exitCode = await withSuppressedExit(async () => {
+      const contract = await resolveAdapter(options.adapter).extract(entry);
+      writeContract(contract);
+      console.log("🔄 CLI contract updated successfully.");
+      return 0;
+    });
+    process.exit(exitCode);
   });
+
+/**
+ * Runs `action` with `process.exit` neutralized, restoring the real one
+ * the instant `action` settles - then the caller calls the *real*
+ * `process.exit` immediately with cliguard's own, correct code.
+ *
+ * Why this exists: the fallback in commander.adapter.ts /
+ * cac.adapter.ts's construction-capture lets a target CLI's own
+ * top-level code run further than a plain export lookup ever did - real
+ * targets often call `.parse()`/`.run()` for real as a side effect of
+ * being loaded, sometimes asynchronously (an `await` inside their own
+ * main function, a dangling `.catch()` continuation still in flight).
+ * Node's `process.exit()` is immediate and unconditional - if that
+ * dangling target code calls it (even with an unrelated code, even
+ * *after* cliguard already computed the right answer), it kills this
+ * process with the target's exit code, not cliguard's. Restoring the
+ * real `process.exit` and calling it ourselves right away, synchronously,
+ * the moment `action` resolves closes the race: Node's exit is immediate
+ * and single-threaded, so nothing queued after that point - including
+ * whatever the target's own code was about to do - ever runs.
+ */
+async function withSuppressedExit<T>(action: () => Promise<T>): Promise<T> {
+  const realExit = process.exit.bind(process);
+  // eslint-disable-next-line @typescript-eslint/no-empty-function -- deliberately a no-op: see doc comment above
+  process.exit = (() => undefined) as unknown as typeof process.exit;
+  try {
+    return await action();
+  } finally {
+    process.exit = realExit;
+  }
+}
 
 /** A version bump under semver that this diff implies, or null if nothing changed. */
 type SuggestedBump = "major" | "minor" | "patch" | null;

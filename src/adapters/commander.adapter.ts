@@ -8,6 +8,7 @@ import type {
   OptionValueType,
 } from "../core/types";
 import type { CliAdapter } from "./adapter.interface";
+import { captureConstructions } from "./construction-capture";
 import { loadModule } from "./load-module";
 
 /**
@@ -45,26 +46,56 @@ export class CommanderAdapter implements CliAdapter {
   }
 
   private async loadCommand(entryPath: string): Promise<Command> {
+    // Patched *before* the target loads, so a `new Command()` or
+    // `createCommand()` call anywhere in its own top-level code gets
+    // captured as a side effect of loadModule() below - even if the
+    // target never exports the result anywhere. See
+    // construction-capture.ts for why this is safe and what it can't
+    // reach.
+    const captured = captureConstructions("commander", entryPath, "Command", ["createCommand"]);
+
     const { viaImport, viaRequire } = await loadModule(entryPath);
     const command =
-      this.findCommand(viaImport.moduleExports) ?? this.findCommand(viaRequire.moduleExports);
+      this.findCommand(viaImport.moduleExports) ??
+      this.findCommand(viaRequire.moduleExports) ??
+      this.pickBestCandidate(captured);
     if (command) return command;
 
-    // Neither attempt's exports contained a Command. One load attempt
-    // failing on its own is normal and expected (an ESM-only file can't
-    // require(), a CJS one may reject a bare import() on an older Node)
-    // - the interesting case is when the file simply never loaded at all
-    // (a syntax error, a missing dependency inside it), which the
-    // generic "no Command instance found" message below would otherwise
+    // Neither attempt's exports contained a Command, and nothing was
+    // captured during construction either. One load attempt failing on
+    // its own is normal and expected (an ESM-only file can't require(),
+    // a CJS one may reject a bare import() on an older Node) - the
+    // interesting case is when the file simply never loaded at all (a
+    // syntax error, a missing dependency inside it), which the generic
+    // "no Command instance found" message below would otherwise
     // misrepresent as "loaded fine, wrong export shape." Surface both
     // real reasons so the actual cause - a broken file vs. a genuinely
     // missing export - is never a guess.
     throw new Error(
       `cliguard: no Commander.js Command instance found in "${entryPath}". ` +
         "Export it as `export default program`, `module.exports = program`, " +
-        "or a named export (e.g. `export const program = new Command()`).\n" +
+        "or a named export (e.g. `export const program = new Command()`). If the file " +
+        "builds its Command inside a function that only runs when something calls it " +
+        "(never at the top level), point cliguard at a small wrapper file that calls " +
+        "that function and exports the result instead - see the README's " +
+        '"Entry files that build the CLI lazily" section.\n' +
         `  import() failed: ${viaImport.error ?? "module loaded, but exported no Command instance"}\n` +
         `  require() failed: ${viaRequire.error ?? "module loaded, but exported no Command instance"}`,
+    );
+  }
+
+  /** Among every Command captured during construction, the one that looks most like the real, fully-built root program - flags on this file's own top-level code sometimes constructing more than one incidentally. */
+  private pickBestCandidate(candidates: readonly unknown[]): Command | undefined {
+    const valid = candidates.filter((candidate): candidate is Command =>
+      this.looksLikeCommand(candidate),
+    );
+    if (valid.length === 0) return undefined;
+
+    return valid.reduce((best, candidate) =>
+      candidate.options.length + candidate.commands.length >
+      best.options.length + best.commands.length
+        ? candidate
+        : best,
     );
   }
 

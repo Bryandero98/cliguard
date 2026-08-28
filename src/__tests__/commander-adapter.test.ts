@@ -55,6 +55,20 @@ describe("CommanderAdapter", () => {
     });
   });
 
+  it("finds a Command that's never exported, via the construction-capture fallback", async () => {
+    const adapter = new CommanderAdapter();
+    const unexported = path.join(__dirname, "..", "__fixtures__", "unexported-eager-cli.js");
+    const contract = await adapter.extract(unexported);
+
+    expect(contract.root.name).toBe("mycli");
+    expect(contract.root.subcommands).toHaveLength(1);
+    expect(contract.root.subcommands[0].name).toBe("build");
+    expect(contract.root.subcommands[0].options[0]).toMatchObject({
+      name: "target",
+      required: true,
+    });
+  });
+
   it("throws a clear error when no Command instance is exported", async () => {
     const adapter = new CommanderAdapter();
     const notACli = path.join(__dirname, "..", "__fixtures__", "not-a-cli.js");
