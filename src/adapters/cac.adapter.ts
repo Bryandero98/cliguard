@@ -10,25 +10,6 @@ import type { CliAdapter } from "./adapter.interface";
 import { loadModule } from "./load-module";
 
 /**
- * `cac` is an optional peer dependency (see package.json) - a project
- * whose target CLI is built with Commander has no reason to install it.
- * Loaded lazily, only when this adapter actually runs, so importing this
- * file (which `bin.ts` does unconditionally, to register every adapter)
- * never requires `cac` to be present.
- */
-function loadCacClass(): new (name?: string) => CAC {
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports -- deliberate lazy load of an optional peer dependency
-    const cacModule = require("cac") as { CAC: new (name?: string) => CAC };
-    return cacModule.CAC;
-  } catch {
-    throw new Error(
-      "cliguard: the CAC adapter needs the `cac` package. Run `npm install --save-dev cac`.",
-    );
-  }
-}
-
-/**
  * Extracts a Contract from a target file that exports a `cac()` `CAC`
  * instance. Never parses --help output - every field comes straight from
  * CAC's own object graph (`.commands`, `.globalCommand`, `.options`,
@@ -58,11 +39,8 @@ export class CacAdapter implements CliAdapter {
   }
 
   private async loadCac(entryPath: string): Promise<CAC> {
-    const CacClass = loadCacClass();
     const { viaImport, viaRequire } = await loadModule(entryPath);
-    const cli =
-      this.findCac(viaImport.moduleExports, CacClass) ??
-      this.findCac(viaRequire.moduleExports, CacClass);
+    const cli = this.findCac(viaImport.moduleExports) ?? this.findCac(viaRequire.moduleExports);
     if (cli) return cli;
 
     // See CommanderAdapter's identical block for why both real errors -
@@ -77,24 +55,52 @@ export class CacAdapter implements CliAdapter {
   }
 
   /** Handles `export default`, `module.exports = cli`, and named exports. */
-  private findCac(moduleExports: unknown, CacClass: new (name?: string) => CAC): CAC | undefined {
-    if (moduleExports instanceof CacClass) {
+  private findCac(moduleExports: unknown): CAC | undefined {
+    if (this.looksLikeCac(moduleExports)) {
       return moduleExports;
     }
 
     if (moduleExports && typeof moduleExports === "object") {
       const exportsObject = moduleExports as Record<string, unknown>;
 
-      if (exportsObject.default instanceof CacClass) {
+      if (this.looksLikeCac(exportsObject.default)) {
         return exportsObject.default;
       }
 
       for (const value of Object.values(exportsObject)) {
-        if (value instanceof CacClass) return value;
+        if (this.looksLikeCac(value)) return value;
       }
     }
 
     return undefined;
+  }
+
+  /**
+   * Structural check, not `instanceof CAC` - see CommanderAdapter's
+   * identical-purpose `looksLikeCommand` for why: the target project's
+   * own `cac` install is almost always a separate copy from any `cac`
+   * cliguard itself could resolve, even at the identical version, so
+   * `instanceof` fails by construction. This also removes the only
+   * reason this adapter ever needed `cac` installed in cliguard's own
+   * environment - `require("cac")` from cliguard's own (often
+   * `npx`-isolated) location previously gated every use of this adapter
+   * behind a package cliguard could rarely actually see, even when the
+   * target project had it. The target file's own `require("cac")` /
+   * `import("cac")`, resolved from *its* location by `loadModule`, is
+   * the only place `cac` needs to be installed now - and if it isn't,
+   * that failure surfaces below via the real load error, same as any
+   * other missing dependency.
+   */
+  private looksLikeCac(value: unknown): value is CAC {
+    if (!value || typeof value !== "object") return false;
+    const candidate = value as Record<string, unknown>;
+    return (
+      Array.isArray(candidate.commands) &&
+      typeof candidate.globalCommand === "object" &&
+      candidate.globalCommand !== null &&
+      typeof candidate.command === "function" &&
+      typeof candidate.parse === "function"
+    );
   }
 
   /**

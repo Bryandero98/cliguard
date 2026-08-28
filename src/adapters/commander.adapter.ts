@@ -70,23 +70,49 @@ export class CommanderAdapter implements CliAdapter {
 
   /** Handles `export default`, `module.exports = program`, and named exports. */
   private findCommand(moduleExports: unknown): Command | undefined {
-    if (moduleExports instanceof Command) {
+    if (this.looksLikeCommand(moduleExports)) {
       return moduleExports;
     }
 
     if (moduleExports && typeof moduleExports === "object") {
       const exportsObject = moduleExports as Record<string, unknown>;
 
-      if (exportsObject.default instanceof Command) {
+      if (this.looksLikeCommand(exportsObject.default)) {
         return exportsObject.default;
       }
 
       for (const value of Object.values(exportsObject)) {
-        if (value instanceof Command) return value;
+        if (this.looksLikeCommand(value)) return value;
       }
     }
 
     return undefined;
+  }
+
+  /**
+   * Structural check, not `instanceof Command`. The target CLI almost
+   * always has its own separate install of `commander` - a different
+   * copy than the one this adapter imports, even at the identical
+   * version - because `npx cliguard` installs cliguard (and its pinned
+   * `commander`) into its own isolated location, unrelated to the target
+   * project's `node_modules`. Node gives every resolved copy of a
+   * package its own class identity ("dual package hazard"), so
+   * `instanceof` fails by construction in that - extremely common - case.
+   * Verified against a real external consumer project via `npx cliguard`
+   * with its own separate `commander` install, both at a different major
+   * version and at the identical version to this package's own
+   * `^12.1.0` - `instanceof` failed in both; this doesn't.
+   */
+  private looksLikeCommand(value: unknown): value is Command {
+    if (!value || typeof value !== "object") return false;
+    const candidate = value as Record<string, unknown>;
+    return (
+      Array.isArray(candidate.options) &&
+      Array.isArray(candidate.commands) &&
+      typeof candidate.name === "function" &&
+      typeof candidate.action === "function" &&
+      typeof candidate.opts === "function"
+    );
   }
 
   /** Recurses into `command.commands` so root and every subcommand at any depth go through the same mapping. */
