@@ -71,6 +71,25 @@ npx cliguard update ./bin/cli.js
 
 `cliguard check` exits `1` if it finds even one `BREAKING` change, and `0` otherwise - safe to drop straight into any CI pipeline.
 
+Pass `--json` to `check` for a machine-readable result instead of the emoji lines above - useful for a bot that comments on the PR, a dashboard, or any other script consuming the result instead of a human reading it:
+
+```sh
+npx cliguard check ./bin/cli.js --json
+```
+
+```json
+{
+  "ok": false,
+  "changes": [
+    { "type": "BREAKING", "path": "root -> build -> option[--target]", "message": "Option \"--target\" was removed." }
+  ],
+  "summary": { "breaking": 1, "additive": 0, "patch": 0 },
+  "suggestedBump": "major"
+}
+```
+
+`suggestedBump` is the semver bump this diff implies (`"major"`, `"minor"`, `"patch"`, or `null` if nothing changed) - a direct read of the same BREAKING/ADDITIVE/PATCH classification the emoji output already uses, so a release script never has to re-derive it.
+
 ## How changes get classified
 
 | | Removed | Added | Required flipped | Value type / default changed |

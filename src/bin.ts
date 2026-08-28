@@ -72,10 +72,17 @@ program
   .description("Compare the current CLI surface against the committed contract")
   .argument("<entry>", "path to the target CLI's entry file")
   .option(...adapterOption)
-  .action(async (entry: string, options: { adapter: string }) => {
+  .option("--json", "print a machine-readable JSON result instead of text", false)
+  .action(async (entry: string, options: { adapter: string; json: boolean }) => {
     const oldContract = readContract();
     const newContract = await resolveAdapter(options.adapter).extract(entry);
     const diff = diffEngine.compare(oldContract, newContract);
+    const hasBreaking = diff.some((entry) => entry.type === ChangeType.BREAKING);
+
+    if (options.json) {
+      console.log(JSON.stringify(toJsonResult(diff), null, 2));
+      process.exit(hasBreaking ? 1 : 0);
+    }
 
     if (diff.length === 0) {
       console.log("✅ CLI contract is intact.");
@@ -83,8 +90,6 @@ program
     }
 
     printDiff(diff);
-
-    const hasBreaking = diff.some((entry) => entry.type === ChangeType.BREAKING);
     process.exit(hasBreaking ? 1 : 0);
   });
 
@@ -98,6 +103,38 @@ program
     writeContract(contract);
     console.log("🔄 CLI contract updated successfully.");
   });
+
+/** A version bump under semver that this diff implies, or null if nothing changed. */
+type SuggestedBump = "major" | "minor" | "patch" | null;
+
+interface JsonCheckResult {
+  readonly ok: boolean;
+  readonly changes: readonly DiffResult[];
+  readonly summary: {
+    readonly breaking: number;
+    readonly additive: number;
+    readonly patch: number;
+  };
+  readonly suggestedBump: SuggestedBump;
+}
+
+function toJsonResult(diff: readonly DiffResult[]): JsonCheckResult {
+  const summary = {
+    breaking: diff.filter((entry) => entry.type === ChangeType.BREAKING).length,
+    additive: diff.filter((entry) => entry.type === ChangeType.ADDITIVE).length,
+    patch: diff.filter((entry) => entry.type === ChangeType.PATCH).length,
+  };
+  const suggestedBump: SuggestedBump =
+    summary.breaking > 0
+      ? "major"
+      : summary.additive > 0
+        ? "minor"
+        : summary.patch > 0
+          ? "patch"
+          : null;
+
+  return { ok: summary.breaking === 0, changes: diff, summary, suggestedBump };
+}
 
 function printDiff(diff: readonly DiffResult[]): void {
   for (const entry of diff) {

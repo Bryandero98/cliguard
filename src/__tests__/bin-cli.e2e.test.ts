@@ -93,6 +93,70 @@ describe("cliguard CLI (subprocess)", () => {
     }
   });
 
+  it("check --json reports ok:true and no changes when nothing changed", () => {
+    const { dir, cleanup } = makeTempDir();
+    try {
+      runCli(dir, ["init", FIXTURE]);
+
+      const { status, output } = runCli(dir, ["check", FIXTURE, "--json"]);
+      expect(status).toBe(0);
+      expect(JSON.parse(output)).toEqual({
+        ok: true,
+        changes: [],
+        summary: { breaking: 0, additive: 0, patch: 0 },
+        suggestedBump: null,
+      });
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("check --json reports a BREAKING change with suggestedBump major, exit 1", () => {
+    const { dir, cleanup } = makeTempDir();
+    const fixture = writeModifiedFixture((source) =>
+      source
+        .split("\n")
+        .filter((line) => !line.includes(".requiredOption("))
+        .join("\n"),
+    );
+    try {
+      runCli(dir, ["init", FIXTURE]);
+
+      const { status, output } = runCli(dir, ["check", fixture.path, "--json"]);
+      expect(status).toBe(1);
+      const result = JSON.parse(output) as { ok: boolean; suggestedBump: string; summary: object };
+      expect(result.ok).toBe(false);
+      expect(result.suggestedBump).toBe("major");
+      expect(result.summary).toEqual({ breaking: 1, additive: 0, patch: 0 });
+    } finally {
+      cleanup();
+      fixture.cleanup();
+    }
+  });
+
+  it("check --json reports an ADDITIVE-only change with suggestedBump minor, exit 0", () => {
+    const { dir, cleanup } = makeTempDir();
+    const fixture = writeModifiedFixture((source) =>
+      source.replace(
+        '.option("--verbose", "verbose logging")',
+        '.option("--verbose", "verbose logging")\n    .option("--dry-run", "dry run mode")',
+      ),
+    );
+    try {
+      runCli(dir, ["init", FIXTURE]);
+
+      const { status, output } = runCli(dir, ["check", fixture.path, "--json"]);
+      expect(status).toBe(0);
+      const result = JSON.parse(output) as { ok: boolean; suggestedBump: string; summary: object };
+      expect(result.ok).toBe(true);
+      expect(result.suggestedBump).toBe("minor");
+      expect(result.summary).toEqual({ breaking: 0, additive: 1, patch: 0 });
+    } finally {
+      cleanup();
+      fixture.cleanup();
+    }
+  });
+
   it("update overwrites the committed contract so a later check against the same file is clean", () => {
     const { dir, cleanup } = makeTempDir();
     const fixture = writeModifiedFixture((source) =>
