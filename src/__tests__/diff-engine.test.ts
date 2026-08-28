@@ -249,6 +249,31 @@ describe("DiffEngine", () => {
     });
   });
 
+  it('labels an unnamed command (CAC\'s default command, name === "") as <default> instead of a blank path segment', () => {
+    const option = {
+      flags: "-o, --out <path>",
+      name: "out",
+      aliases: ["-o"],
+      description: "output path",
+      required: false,
+      valueType: "string" as const,
+      variadic: false,
+      defaultValue: null,
+    };
+    const oldContract = makeContract(
+      makeCommand({ subcommands: [makeCommand({ name: "", options: [option] })] }),
+    );
+    const newContract = makeContract(makeCommand({ subcommands: [makeCommand({ name: "" })] }));
+
+    const diff = engine.compare(oldContract, newContract);
+
+    expect(diff).toContainEqual({
+      type: ChangeType.BREAKING,
+      path: "root -> <default> -> option[--out]",
+      message: 'Option "--out" was removed.',
+    });
+  });
+
   it("flags a BREAKING change when an alias is removed, and PATCH when one is added", () => {
     const oldContract = makeContract(makeCommand({ aliases: ["b"] }));
     const removed = engine.compare(oldContract, makeContract(makeCommand({ aliases: [] })));

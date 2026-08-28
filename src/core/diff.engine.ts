@@ -61,12 +61,17 @@ export class DiffEngine {
       results.push({
         type: ChangeType.PATCH,
         path,
-        message: `Description changed for command "${oldCmd.name}".`,
+        message: `Description changed for command "${this.commandLabel(oldCmd.name)}".`,
       });
     }
 
     results.push(
-      ...this.compareAliases(oldCmd.aliases, newCmd.aliases, path, `command "${oldCmd.name}"`),
+      ...this.compareAliases(
+        oldCmd.aliases,
+        newCmd.aliases,
+        path,
+        `command "${this.commandLabel(oldCmd.name)}"`,
+      ),
     );
 
     results.push(...this.compareOptions(oldCmd.options, newCmd.options, path));
@@ -86,14 +91,14 @@ export class DiffEngine {
     const newByName = this.indexByName(newSubs);
 
     for (const [name, oldSub] of oldByName) {
-      const childPath = `${path} -> ${name}`;
+      const childPath = `${path} -> ${this.commandLabel(name)}`;
       const newSub = newByName.get(name);
 
       if (!newSub) {
         results.push({
           type: ChangeType.BREAKING,
           path: childPath,
-          message: `Command "${name}" was removed.`,
+          message: `Command "${this.commandLabel(name)}" was removed.`,
         });
         continue;
       }
@@ -105,12 +110,17 @@ export class DiffEngine {
       if (oldByName.has(name)) continue;
       results.push({
         type: ChangeType.ADDITIVE,
-        path: `${path} -> ${name}`,
-        message: `Command "${name}" was added.`,
+        path: `${path} -> ${this.commandLabel(name)}`,
+        message: `Command "${this.commandLabel(name)}" was added.`,
       });
     }
 
     return results;
+  }
+
+  /** CAC's default command (declared with no leading name, e.g. `cli.command("[...files]", ...)`) has name === "" - a blank path segment reads as a typo, not a real command. */
+  private commandLabel(name: string): string {
+    return name === "" ? "<default>" : name;
   }
 
   private compareOptions(
