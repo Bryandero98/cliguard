@@ -71,6 +71,17 @@ describe("CommanderAdapter", () => {
     await expect(adapter.extract(missing)).rejects.not.toThrow(/Command instance found/);
   });
 
+  it("surfaces the real syntax error instead of the generic 'no Command instance' message", async () => {
+    const adapter = new CommanderAdapter();
+    const broken = path.join(__dirname, "..", "__fixtures__", "broken-syntax-cli.js");
+    // The real cause (a syntax error) must be visible, not swallowed in
+    // favor of the generic message - the fix for "your file has a typo"
+    // and "you forgot to export the program" are completely different,
+    // and only one of the two is knowable from a caught-and-discarded
+    // error.
+    await expect(adapter.extract(broken)).rejects.toThrow(/SyntaxError/);
+  });
+
   // Genuine-ESM target CLIs (esm-cli.mjs, esm-top-level-await-cli.mjs) are
   // covered in esm-target-cli.e2e.test.ts, not here: loading them needs a
   // real dynamic import(), and Jest's own VM sandbox intercepts that

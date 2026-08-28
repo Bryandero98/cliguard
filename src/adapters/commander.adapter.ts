@@ -92,27 +92,42 @@ export class CommanderAdapter implements CliAdapter {
     // "c:" and throws ERR_UNSUPPORTED_ESM_URL_SCHEME. pathToFileURL is a
     // no-op in effect on POSIX (still produces a valid file:// URL there).
     const viaImport = await this.tryLoad(() => dynamicImport(pathToFileURL(absolutePath).href));
-    if (viaImport) return viaImport;
+    if (viaImport.command) return viaImport.command;
 
     // eslint-disable-next-line @typescript-eslint/no-require-imports -- deliberate fallback for target CLIs that aren't import()-able
     const viaRequire = await this.tryLoad(() => Promise.resolve(require(absolutePath) as unknown));
-    if (viaRequire) return viaRequire;
+    if (viaRequire.command) return viaRequire.command;
 
+    // Both attempts failed. One of them failing on its own is normal and
+    // expected (an ESM-only file can't require(), a CJS one may reject a
+    // bare import() on an older Node) - the interesting case is when the
+    // file simply never loaded at all (a syntax error, a missing
+    // dependency inside it), which the generic "no Command instance
+    // found" message below would otherwise misrepresent as "loaded fine,
+    // wrong export shape." Surface both real errors so the actual cause
+    // - a broken file vs. a genuinely missing export - is never a guess.
     throw new Error(
       `cliguard: no Commander.js Command instance found in "${entryPath}". ` +
         "Export it as `export default program`, `module.exports = program`, " +
-        "or a named export (e.g. `export const program = new Command()`).",
+        "or a named export (e.g. `export const program = new Command()`).\n" +
+        `  import() failed: ${viaImport.error}\n` +
+        `  require() failed: ${viaRequire.error}`,
     );
   }
 
-  private async tryLoad(load: () => Promise<unknown>): Promise<Command | undefined> {
+  private async tryLoad(
+    load: () => Promise<unknown>,
+  ): Promise<{ command: Command | undefined; error: unknown }> {
     let moduleExports: unknown;
     try {
       moduleExports = await load();
-    } catch {
-      return undefined;
+    } catch (error) {
+      return { command: undefined, error };
     }
-    return this.findCommand(moduleExports);
+    return {
+      command: this.findCommand(moduleExports),
+      error: "module loaded, but exported no Command instance",
+    };
   }
 
   /** Handles `export default`, `module.exports = program`, and named exports. */

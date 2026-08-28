@@ -36,6 +36,8 @@ program.command("build").requiredOption("-t, --target <target>", "build target")
 module.exports = { program }; // <- cliguard reads this, never runs it
 ```
 
+ESM entry files work the same way - `export default program` (or a named export) instead of `module.exports`. cliguard loads your entry through a real dynamic `import()`, so this works even for a target CLI with a top-level `await`.
+
 Then:
 
 ```sh

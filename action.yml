@@ -13,5 +13,5 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - run: npx cliguard check ${{ inputs.entry }}
+    - run: npx cliguard check "${{ inputs.entry }}"
       shell: bash
