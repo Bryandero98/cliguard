@@ -114,7 +114,7 @@ or changes a default value, the build fails right there with exactly what
 changed and where:
 
 ```text
-🔴 [root -> build -> option[--target]] Required option "--target" was removed.
+🔴 [root -> build -> option[--target]] Option "--target" was removed.
 ```
 
 And when you add something new and safe, the check passes straight

@@ -11,7 +11,7 @@ REST and GraphQL APIs have contract testing (Pact, Specmatic, oasdiff) baked int
 `cliguard` captures your CLI's real contract - every command, flag, default, and required argument - straight from your CLI framework's own object graph, not by parsing `--help` text. Commit that contract like a snapshot test. From then on, `cliguard check` fails your build the moment a change would break an existing caller, and passes straight through anything additive or cosmetic.
 
 ```text
-🔴 [root -> build -> option[--target]] Required option "--target" was removed.
+🔴 [root -> build -> option[--target]] Option "--target" was removed.
 🟢 [root -> build -> option[--dry-run]] New optional option "--dry-run" was added.
 ```
 

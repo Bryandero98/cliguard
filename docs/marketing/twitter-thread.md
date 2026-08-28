@@ -26,7 +26,7 @@ npx cliguard check ./bin/cli.js
 ```
 
 ```
-🔴 [root -> build -> option[--target]] Required option "--target" was removed.
+🔴 [root -> build -> option[--target]] Option "--target" was removed.
 ```
 
 Exit code 1. Build fails on the PR that broke it - not three hours later when someone else's pipeline goes red.

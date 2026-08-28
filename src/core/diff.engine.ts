@@ -130,7 +130,7 @@ export class DiffEngine {
         results.push({
           type: ChangeType.BREAKING,
           path: optionPath,
-          message: `Required option "--${name}" was removed.`,
+          message: `Option "--${name}" was removed.`,
         });
         continue;
       }

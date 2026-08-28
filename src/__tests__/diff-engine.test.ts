@@ -56,7 +56,40 @@ describe("DiffEngine", () => {
     expect(diff).toContainEqual({
       type: ChangeType.BREAKING,
       path: "root -> option[--target]",
-      message: 'Required option "--target" was removed.',
+      message: 'Option "--target" was removed.',
+    });
+  });
+
+  it("flags a BREAKING change (with an accurate message) when an optional option is removed", () => {
+    // Regression test: the message used to hardcode the word "Required"
+    // regardless of whether the removed option actually was one -
+    // removing an optional option is just as BREAKING (it still breaks
+    // any invocation that passed it), but claiming it was "required" is
+    // simply false and misleading in the diff output.
+    const oldContract = makeContract(
+      makeCommand({
+        options: [
+          {
+            flags: "--verbose",
+            name: "verbose",
+            aliases: [],
+            description: "verbose logging",
+            required: false,
+            valueType: "boolean",
+            variadic: false,
+            defaultValue: null,
+          },
+        ],
+      }),
+    );
+    const newContract = makeContract(makeCommand({ options: [] }));
+
+    const diff = engine.compare(oldContract, newContract);
+
+    expect(diff).toContainEqual({
+      type: ChangeType.BREAKING,
+      path: "root -> option[--verbose]",
+      message: 'Option "--verbose" was removed.',
     });
   });
 
