@@ -46,29 +46,55 @@ This is the one architectural rule that matters most in this codebase:
   }
   ```
 
-- `src/adapters/commander.adapter.ts` is the reference implementation. It's
-  the file to read before writing a new adapter - notice that it never
-  parses `--help` output; every field comes straight from Commander's own
-  object graph (`command.options`, `command.commands`,
-  `command.registeredArguments`).
+- `src/adapters/commander.adapter.ts` and `src/adapters/cac.adapter.ts` are
+  the two reference implementations - read both before writing a new one.
+  Neither parses `--help` output; every field comes straight from each
+  framework's own object graph (Commander: `command.options`,
+  `command.commands`, `command.registeredArguments`; CAC: `cli.commands`,
+  `cli.globalCommand`, `command.options`, `command.args`). CAC's adapter
+  doc comment is also worth reading for how to handle a framework whose
+  shape doesn't map onto `Contract` 1:1 (no declarative required-option
+  concept, a flat command list instead of a tree) - state the real
+  limitation in a comment rather than forcing a fit.
+- `src/adapters/load-module.ts` is shared by every adapter - the real
+  dynamic `import()` (immune to TypeScript's own rewriting), the Windows
+  `file://` URL handling, and the missing-file check all live there once.
+  A new adapter should use it rather than reimplementing entry-file
+  loading; only "which class am I looking for in the loaded exports" is
+  each adapter's own job.
+- A framework that isn't a core dependency of cliguard itself (only
+  Commander is - CAC is an optional peer dependency, since a project
+  targeting Commander has no reason to install it) needs a lazy
+  `require()` inside the adapter, not a top-level `import` - see
+  `cac.adapter.ts`'s `loadCacClass()` for the pattern, including the error
+  message when the package isn't installed.
 
-**The best way to contribute to cliguard is a new adapter.** Commander.js is
-the only framework supported today - Yargs and CAC are both real gaps (see
-the [good first issues](https://github.com/Bryandero98/cliguard/issues)).
-To add one:
+**The best way to contribute to cliguard is a new adapter.** Commander.js and
+CAC are both supported today - Yargs is a real gap (see the
+[good first issue](https://github.com/Bryandero98/cliguard/issues)). To add
+one:
 
-1. Create `src/adapters/<framework>.adapter.ts` implementing `CliAdapter`.
+1. Create `src/adapters/<framework>.adapter.ts` implementing `CliAdapter`,
+   using `loadModule` from `load-module.ts` for entry-file loading.
 2. Map that framework's own internal representation onto `Contract` -
    introspect real objects/APIs the framework exposes, never regex against
-   rendered `--help` text (see rule above).
-3. Add a real fixture CLI built with that framework under
+   rendered `--help` text (see rule above). If the framework's own model
+   doesn't map cleanly onto some `Contract` field, say so in a comment
+   (see CAC's adapter) rather than forcing a value that isn't really there.
+3. If the framework isn't already a `dependencies`/`peerDependencies` entry
+   in `package.json`, add it as an optional peer dependency (see CAC's
+   entry) plus a `devDependency` for tests, and load it lazily inside the
+   adapter rather than with a top-level import.
+4. Add a real fixture CLI built with that framework under
    `src/__fixtures__/`, and a test file mirroring
-   `commander-adapter.test.ts`'s coverage: root + subcommand, every option
-   shape (boolean, required, with a default), required and variadic
-   positional arguments, and the "no CLI instance found" error path.
-4. `src/core/diff.engine.ts` and `src/bin.ts` should need **zero** changes -
-   if they do, that's a sign the adapter is leaking framework details past
-   the `CliAdapter` boundary.
+   `commander-adapter.test.ts`'s or `cac-adapter.test.ts`'s coverage: root
+   + subcommand, every option shape (boolean, required if the framework
+   supports it, with a default), required and variadic positional
+   arguments, and the "no CLI instance found" error path.
+5. Register the new adapter in `src/bin.ts`'s `adapters` map.
+6. `src/core/diff.engine.ts` should need **zero** changes - if it does,
+   that's a sign the adapter is leaking framework details past the
+   `CliAdapter` boundary.
 
 ## Code style
 

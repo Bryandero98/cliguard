@@ -30,10 +30,14 @@ straight from the framework's own data, not a text rendering of it.
 
 The core (the types and the diff engine) has zero knowledge that Commander
 exists - there's a `CliAdapter` interface and all the framework-specific
-code lives behind it, so Yargs/CAC support should be a self-contained
-adapter, not a rewrite. I haven't built a second adapter myself yet, so
-honestly I don't know if the interface is actually right until someone
-tries to implement one against it.
+code lives behind it. I've since built a second adapter (CAC) against the
+same interface with zero changes to the core, which is a decent sign it's
+actually the right boundary - though CAC surfaced one real thing worth
+knowing: not every framework's model maps 1:1 onto the contract shape
+(CAC has no declarative "this flag is required" concept, for instance),
+so an adapter sometimes has to state a real limitation rather than force
+a value that isn't there. Yargs is next, and still open if you want to
+try implementing one.
 
 Genuinely curious what this sub thinks of the introspection-vs-parsing
 tradeoff, and whether the adapter interface looks like something you'd

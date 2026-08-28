@@ -133,10 +133,10 @@ npx cliguard update ./bin/cli.js
 
 ## Where it's headed
 
-`cliguard` only supports Commander.js today, on purpose - the core (the
-contract types and the diff engine) is 100% framework-agnostic, with every
-framework-specific detail behind a small `CliAdapter` interface. Yargs and
-CAC adapters are open [good first issues](https://github.com/Bryandero98/cliguard/issues)
+`cliguard` supports Commander.js and CAC today - the core (the contract
+types and the diff engine) is 100% framework-agnostic, with every
+framework-specific detail behind a small `CliAdapter` interface. Yargs is
+the next open [good first issue](https://github.com/Bryandero98/cliguard/issues)
 if you want to try implementing one.
 
 Repo (MIT): https://github.com/Bryandero98/cliguard

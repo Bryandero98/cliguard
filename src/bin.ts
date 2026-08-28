@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 import { Command } from "commander";
 
+import type { CliAdapter } from "./adapters/adapter.interface";
+import { CacAdapter } from "./adapters/cac.adapter";
 import { CommanderAdapter } from "./adapters/commander.adapter";
 import { DiffEngine, type DiffResult } from "./core/diff.engine";
 import {
@@ -11,7 +13,25 @@ import {
 } from "./core/storage";
 import { ChangeType } from "./core/types";
 
-const adapter = new CommanderAdapter();
+// Constructing an adapter here is cheap (no eager require of its
+// framework - CacAdapter only loads `cac` lazily, inside extract()), so
+// every adapter is always registered regardless of which one a given
+// invocation actually uses.
+const adapters: Readonly<Record<string, CliAdapter>> = {
+  commander: new CommanderAdapter(),
+  cac: new CacAdapter(),
+};
+
+function resolveAdapter(name: string): CliAdapter {
+  const adapter = adapters[name];
+  if (!adapter) {
+    throw new Error(
+      `cliguard: unknown adapter "${name}". Available: ${Object.keys(adapters).join(", ")}.`,
+    );
+  }
+  return adapter;
+}
+
 const diffEngine = new DiffEngine();
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- package.json has no type declarations to import against; require() is the simplest correct read here
@@ -25,17 +45,24 @@ program
   )
   .version(packageJson.version);
 
+const adapterOption = [
+  "-a, --adapter <name>",
+  "CLI framework adapter to use",
+  "commander",
+] as const;
+
 program
   .command("init")
   .description("Capture the current CLI surface as the committed contract")
   .argument("<entry>", "path to the target CLI's entry file")
-  .action(async (entry: string) => {
+  .option(...adapterOption)
+  .action(async (entry: string, options: { adapter: string }) => {
     if (contractExists()) {
       console.warn(`El contrato ya existe. Usa "cliguard update" para sobrescribirlo.`);
       process.exit(1);
     }
 
-    const contract = await adapter.extract(entry);
+    const contract = await resolveAdapter(options.adapter).extract(entry);
     writeContract(contract);
     console.log(`✅ Contrato de CLI inicializado con éxito en ${getContractDisplayPath()}.`);
   });
@@ -44,9 +71,10 @@ program
   .command("check")
   .description("Compare the current CLI surface against the committed contract")
   .argument("<entry>", "path to the target CLI's entry file")
-  .action(async (entry: string) => {
+  .option(...adapterOption)
+  .action(async (entry: string, options: { adapter: string }) => {
     const oldContract = readContract();
-    const newContract = await adapter.extract(entry);
+    const newContract = await resolveAdapter(options.adapter).extract(entry);
     const diff = diffEngine.compare(oldContract, newContract);
 
     if (diff.length === 0) {
@@ -64,8 +92,9 @@ program
   .command("update")
   .description("Overwrite the committed contract with the CLI's current surface")
   .argument("<entry>", "path to the target CLI's entry file")
-  .action(async (entry: string) => {
-    const contract = await adapter.extract(entry);
+  .option(...adapterOption)
+  .action(async (entry: string, options: { adapter: string }) => {
+    const contract = await resolveAdapter(options.adapter).extract(entry);
     writeContract(contract);
     console.log("🔄 Contrato de CLI actualizado con éxito.");
   });

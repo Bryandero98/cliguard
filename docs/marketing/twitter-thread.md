@@ -32,7 +32,7 @@ npx cliguard check ./bin/cli.js
 Exit code 1. Build fails on the PR that broke it - not three hours later when someone else's pipeline goes red.
 
 **4/**
-MIT licensed. Zero deps beyond Commander itself. Core diffing engine doesn't know Commander exists - adapters for Yargs/CAC are a clean PR away, not a rewrite.
+MIT licensed. Supports Commander.js and CAC today. Core diffing engine doesn't know either framework exists - a new adapter is a clean PR away, not a rewrite. Yargs is next, and open.
 
 github.com/Bryandero98/cliguard
 

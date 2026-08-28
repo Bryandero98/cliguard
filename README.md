@@ -38,6 +38,24 @@ module.exports = { program }; // <- cliguard reads this, never runs it
 
 ESM entry files work the same way - `export default program` (or a named export) instead of `module.exports`. cliguard loads your entry through a real dynamic `import()`, so this works even for a target CLI with a top-level `await`.
 
+Built with [CAC](https://github.com/cacjs/cac) instead? Export the `CAC` instance the same way (`module.exports = { cli }` / `export default cli`) and pass `--adapter cac`:
+
+```js
+// bin/cli.js
+const { cac } = require("cac");
+
+const cli = cac("mycli");
+cli.command("build <entry>", "build target").option("-t, --target <target>", "build target");
+
+module.exports = { cli };
+```
+
+```sh
+npx cliguard init ./bin/cli.js --adapter cac
+```
+
+`cac` itself is an optional dependency of cliguard - only installed if you actually use `--adapter cac`.
+
 Then:
 
 ```sh
@@ -83,9 +101,11 @@ jobs:
 
 ## Supported frameworks
 
-[Commander.js](https://github.com/tj/commander.js) today - it's what Vue CLI, Prettier, and a large share of the npm CLI ecosystem is built on. The core (types + diff engine) is 100% framework-agnostic by design: every framework-specific detail lives behind the `CliAdapter` interface in [`src/adapters/`](src/adapters/), so adding a new adapter never touches the diffing logic. See the [good first issues](https://github.com/Bryandero98/cliguard/labels/good%20first%20issue) for exactly that.
+[Commander.js](https://github.com/tj/commander.js) (default) and [CAC](https://github.com/cacjs/cac) (`--adapter cac`) today. The core (types + diff engine) is 100% framework-agnostic by design: every framework-specific detail lives behind the `CliAdapter` interface in [`src/adapters/`](src/adapters/), so adding a new adapter never touches the diffing logic. Yargs is the next open gap - see the [good first issue](https://github.com/Bryandero98/cliguard/labels/good%20first%20issue).
 
-The current adapter mechanism loads the target CLI's entry file into the Node process (`import()`/`require()`) and reads its object graph directly, so the next targets are other Node frameworks - Yargs and CAC are both open. Cross-language support (Python's Click, Rust's Clap, Go's Cobra) is a real future direction, but needs a different extraction strategy first, since a compiled Clap/Cobra binary can't be `require()`'d into Node the way a JS CLI can - most likely each of those would introspect via a structured `--help` output (some frameworks support a JSON mode) rather than the same in-process approach.
+A couple of `OptionContract`/`ArgumentContract` fields carry real, framework-specific limitations rather than a mapping gap - see [`src/adapters/cac.adapter.ts`](src/adapters/cac.adapter.ts)'s own doc comment for exactly which ones and why (CAC has no declarative "this flag must be passed" concept, and no per-argument description).
+
+The current adapter mechanism loads the target CLI's entry file into the Node process (`import()`/`require()`) and reads its object graph directly, so the next targets are other Node frameworks. Cross-language support (Python's Click, Rust's Clap, Go's Cobra) is a real future direction, but needs a different extraction strategy first, since a compiled Clap/Cobra binary can't be `require()`'d into Node the way a JS CLI can - most likely each of those would introspect via a structured `--help` output (some frameworks support a JSON mode) rather than the same in-process approach.
 
 ## Roadmap
 
