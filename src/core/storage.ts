@@ -20,7 +20,23 @@ export function readContract(): Contract {
       `cliguard: no contract found at "${getContractDisplayPath()}". Run \`cliguard init <entry.js>\` first.`,
     );
   }
-  return JSON.parse(readFileSync(CONTRACT_PATH, "utf-8")) as Contract;
+  const raw = readFileSync(CONTRACT_PATH, "utf-8");
+  try {
+    return JSON.parse(raw) as Contract;
+  } catch (error) {
+    // A bare JSON.parse error ("Unexpected token..." with no file
+    // context) reads as an internal cliguard bug, not "your committed
+    // contract file is corrupted" - which is the actual, fixable cause
+    // (a bad manual edit, a botched merge). Naming the file and the
+    // fix (re-run init/update) turns a confusing crash into an
+    // actionable message.
+    const reason = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `cliguard: "${getContractDisplayPath()}" is not valid JSON (${reason}). ` +
+        "If this file was hand-edited or came out of a bad merge, re-run " +
+        "`cliguard update <entry.js>` to regenerate it.",
+    );
+  }
 }
 
 export function writeContract(contract: Contract): void {
