@@ -107,6 +107,10 @@ A couple of `OptionContract`/`ArgumentContract` fields carry real, framework-spe
 
 The current adapter mechanism loads the target CLI's entry file into the Node process (`import()`/`require()`) and reads its object graph directly, so the next targets are other Node frameworks. Cross-language support (Python's Click, Rust's Clap, Go's Cobra) is a real future direction, but needs a different extraction strategy first, since a compiled Clap/Cobra binary can't be `require()`'d into Node the way a JS CLI can - most likely each of those would introspect via a structured `--help` output (some frameworks support a JSON mode) rather than the same in-process approach.
 
+## Security
+
+Extracting a contract runs the target entry file's own top-level code, the same as `node ./bin/cli.js` would - see [SECURITY.md](./SECURITY.md) for what that means in practice.
+
 ## Roadmap
 
 The CLI and core diffing engine are, and will stay, free and open-source. Planned next: a hosted add-on for teams that want more than a CI exit code - a dashboard with the history of contract changes across releases, and Slack/webhook alerts the moment a breaking change lands. See [issue: Webhook reporter for SaaS integration](https://github.com/Bryandero98/cliguard/issues) for the first building block.
