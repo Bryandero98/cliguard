@@ -4,6 +4,7 @@ import { Command } from "commander";
 import type { CliAdapter } from "./adapters/adapter.interface";
 import { CacAdapter } from "./adapters/cac.adapter";
 import { CommanderAdapter } from "./adapters/commander.adapter";
+import { YargsAdapter } from "./adapters/yargs.adapter";
 import { DiffEngine, type DiffResult } from "./core/diff.engine";
 import {
   contractExists,
@@ -14,12 +15,13 @@ import {
 import { ChangeType } from "./core/types";
 
 // Constructing an adapter here is cheap (no eager require of its
-// framework - CacAdapter only loads `cac` lazily, inside extract()), so
+// framework - optional adapters load their frameworks lazily, inside extract()), so
 // every adapter is always registered regardless of which one a given
 // invocation actually uses.
 const adapters: Readonly<Record<string, CliAdapter>> = {
   commander: new CommanderAdapter(),
   cac: new CacAdapter(),
+  yargs: new YargsAdapter(),
 };
 
 function resolveAdapter(name: string): CliAdapter {

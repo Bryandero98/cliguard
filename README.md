@@ -130,7 +130,7 @@ jobs:
 
 ## Supported frameworks
 
-[Commander.js](https://github.com/tj/commander.js) (default) and [CAC](https://github.com/cacjs/cac) (`--adapter cac`) today. The core (types + diff engine) is 100% framework-agnostic by design: every framework-specific detail lives behind the `CliAdapter` interface in [`src/adapters/`](src/adapters/), so adding a new adapter never touches the diffing logic. Yargs is the next open gap - see the [good first issue](https://github.com/Bryandero98/cliguard/labels/good%20first%20issue).
+[Commander.js](https://github.com/tj/commander.js) (default), [CAC](https://github.com/cacjs/cac) (`--adapter cac`), and [Yargs](https://github.com/yargs/yargs) (`--adapter yargs`) today. The core (types + diff engine) is 100% framework-agnostic by design: every framework-specific detail lives behind the `CliAdapter` interface in [`src/adapters/`](src/adapters/), so adding a new adapter never touches the diffing logic.
 
 A couple of `OptionContract`/`ArgumentContract` fields carry real, framework-specific limitations rather than a mapping gap - see [`src/adapters/cac.adapter.ts`](src/adapters/cac.adapter.ts)'s own doc comment for exactly which ones and why (CAC has no declarative "this flag must be passed" concept, and no per-argument description).
 
