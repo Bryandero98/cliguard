@@ -4,6 +4,7 @@ import { Command } from "commander";
 import type { CliAdapter } from "./adapters/adapter.interface";
 import { CacAdapter } from "./adapters/cac.adapter";
 import { CommanderAdapter } from "./adapters/commander.adapter";
+import { YargsAdapter } from "./adapters/yargs.adapter";
 import { DiffEngine, type DiffResult } from "./core/diff.engine";
 import {
   contractExists,
@@ -20,6 +21,7 @@ import { ChangeType } from "./core/types";
 const adapters: Readonly<Record<string, CliAdapter>> = {
   commander: new CommanderAdapter(),
   cac: new CacAdapter(),
+  yargs: new YargsAdapter(),
 };
 
 function resolveAdapter(name: string): CliAdapter {

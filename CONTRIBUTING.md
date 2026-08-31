@@ -63,16 +63,18 @@ This is the one architectural rule that matters most in this codebase:
   loading; only "which class am I looking for in the loaded exports" is
   each adapter's own job.
 - A framework that isn't a core dependency of cliguard itself (only
-  Commander is - CAC is an optional peer dependency, since a project
-  targeting Commander has no reason to install it) needs a lazy
-  `require()` inside the adapter, not a top-level `import` - see
+  Commander is - CAC and Yargs are optional peer dependencies, since a
+  project targeting Commander has no reason to install either) needs a
+  lazy `require()` inside the adapter, not a top-level `import` - see
   `cac.adapter.ts`'s `loadCacClass()` for the pattern, including the error
   message when the package isn't installed.
 
-**The best way to contribute to cliguard is a new adapter.** Commander.js and
-CAC are both supported today - Yargs is a real gap (see the
-[good first issue](https://github.com/Bryandero98/cliguard/issues)). To add
-one:
+**The best way to contribute to cliguard is a new adapter.** Commander.js,
+CAC, and Yargs are all supported today - Click, Clap, and Cobra are real
+gaps, though each needs a different extraction strategy first since a
+compiled binary can't be `require()`'d into Node the way a JS CLI can (see
+the [good first issue](https://github.com/Bryandero98/cliguard/issues)). To
+add a new Node-framework adapter:
 
 1. Create `src/adapters/<framework>.adapter.ts` implementing `CliAdapter`,
    using `loadModule` from `load-module.ts` for entry-file loading.

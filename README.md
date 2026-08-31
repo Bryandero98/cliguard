@@ -56,11 +56,31 @@ npx cliguard init ./bin/cli.js --adapter cac
 
 `cac` itself is an optional dependency of cliguard - only installed if you actually use `--adapter cac`.
 
+Built with [Yargs](https://github.com/yargs/yargs) instead? Export the instance the same way and pass `--adapter yargs`:
+
+```js
+// bin/cli.js
+const yargs = require("yargs/yargs");
+
+const cli = yargs([])
+  .command("build <entry>", "build the project", (y) =>
+    y.option("target", { alias: "t", describe: "build target", type: "string" }).demandOption("target"),
+  );
+
+module.exports = { cli };
+```
+
+```sh
+npx cliguard init ./bin/cli.js --adapter yargs
+```
+
+Like `cac`, `yargs` itself is an optional dependency of cliguard - only installed if you actually use `--adapter yargs`.
+
 ### Entry files that build the CLI lazily
 
 Not every real CLI exports its instance - plenty build it inside a function that only runs when something actually calls it, or just never had a reason to export it. Pointing cliguard straight at a file like that would fail with "no instance found" under the rule above alone.
 
-So when the direct export lookup finds nothing, cliguard tries one more thing automatically, no flag needed: it patches the exact copy of `commander`/`cac` your entry file will itself `require()`, so any `new Command()` (or CAC's `cac()`) call anywhere in your file's own top-level code is captured - even though nothing was ever exported. This covers most real CLIs, since even ones that never bother exporting still build (and often `.parse()`) at the top of their own file as a matter of course.
+So when the direct export lookup finds nothing, cliguard tries one more thing automatically, no flag needed: it patches the exact copy of `commander`/`cac`/`yargs` your entry file will itself `require()`, so any `new Command()` (or CAC's `cac()`, or a `yargs(...)` call) anywhere in your file's own top-level code is captured - even though nothing was ever exported. This covers most real CLIs, since even ones that never bother exporting still build (and often `.parse()`) at the top of their own file as a matter of course.
 
 It can't reach an instance built strictly *inside* a function that's only invoked later, never automatically at load time (a `main()` some other file calls, not the file cliguard is pointed at) - there's no safe, generic way for cliguard to know which function to call or with what arguments. For that shape, write a small wrapper file that reaches into the target's own internals to get (or construct) the instance, and point cliguard at the wrapper instead of the original entry file. The exact shape of that wrapper is inherently project-specific - it's standing in for whatever that project's own entry point would otherwise do - but the command stays the same either way: `cliguard init ./your-wrapper.mjs`.
 
@@ -130,9 +150,9 @@ jobs:
 
 ## Supported frameworks
 
-[Commander.js](https://github.com/tj/commander.js) (default) and [CAC](https://github.com/cacjs/cac) (`--adapter cac`) today. The core (types + diff engine) is 100% framework-agnostic by design: every framework-specific detail lives behind the `CliAdapter` interface in [`src/adapters/`](src/adapters/), so adding a new adapter never touches the diffing logic. Yargs is the next open gap - see the [good first issue](https://github.com/Bryandero98/cliguard/labels/good%20first%20issue).
+[Commander.js](https://github.com/tj/commander.js) (default), [CAC](https://github.com/cacjs/cac) (`--adapter cac`), and [Yargs](https://github.com/yargs/yargs) (`--adapter yargs`) today. The core (types + diff engine) is 100% framework-agnostic by design: every framework-specific detail lives behind the `CliAdapter` interface in [`src/adapters/`](src/adapters/), so adding a new adapter never touches the diffing logic. Click, Clap, and Cobra are the next open gaps - see the [good first issue](https://github.com/Bryandero98/cliguard/labels/good%20first%20issue).
 
-A couple of `OptionContract`/`ArgumentContract` fields carry real, framework-specific limitations rather than a mapping gap - see [`src/adapters/cac.adapter.ts`](src/adapters/cac.adapter.ts)'s own doc comment for exactly which ones and why (CAC has no declarative "this flag must be passed" concept, and no per-argument description).
+A couple of `OptionContract`/`ArgumentContract` fields carry real, framework-specific limitations rather than a mapping gap - see [`src/adapters/cac.adapter.ts`](src/adapters/cac.adapter.ts)'s own doc comment for exactly which ones and why (CAC has no declarative "this flag must be passed" concept, and no per-argument description). Yargs's own real limitation is the opposite kind - see [`src/adapters/yargs.adapter.ts`](src/adapters/yargs.adapter.ts)'s doc comment for why each command's options are read from a fresh, isolated instance rather than the shared one the target CLI actually built.
 
 The current adapter mechanism loads the target CLI's entry file into the Node process (`import()`/`require()`) and reads its object graph directly, so the next targets are other Node frameworks. Cross-language support (Python's Click, Rust's Clap, Go's Cobra) is a real future direction, but needs a different extraction strategy first, since a compiled Clap/Cobra binary can't be `require()`'d into Node the way a JS CLI can - most likely each of those would introspect via a structured `--help` output (some frameworks support a JSON mode) rather than the same in-process approach.
 
