@@ -1,6 +1,6 @@
 {
   "name": "cliguard",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Snapshot-tests your CLI's contract (commands, flags, defaults) so you never ship a breaking change by accident.",
   "keywords": [
     "cli",
