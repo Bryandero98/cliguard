@@ -48,8 +48,13 @@ jobs:
         id: changelog
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
+          # index()==1 (literal prefix match), not ~ (regex match) - the
+          # heading itself contains [ and ], which ~ would parse as a
+          # regex character class and never match. Verified live: v0.6.0's
+          # own release notes came out empty from the ~ version before
+          # this fix.
           awk -v ver="## [$VERSION]" '
-            $0 ~ "^" ver { found=1; next }
+            index($0, ver) == 1 { found=1; next }
             found && /^## \[/ { exit }
             found { print }
           ' CHANGELOG.md > release-notes.md
