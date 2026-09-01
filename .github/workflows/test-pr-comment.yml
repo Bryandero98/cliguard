@@ -17,6 +17,11 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
+      # This repo's own dist/bin.js isn't npm-installed as a dependency
+      # here (that's the only reason chmod is needed at all - npm's own
+      # bin-linker does this automatically for a real consumer, verified
+      # separately against a real `npm install cliguard`).
+      - run: chmod +x dist/bin.js
       - uses: ./
         with:
           entry: ./demo-cli-for-testing.js
