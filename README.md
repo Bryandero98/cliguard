@@ -252,6 +252,8 @@ npx cliguard check ./bin/cli.js --strict
 
 Off by default so it never changes behavior for an existing CI config - opt in per project.
 
+A `--strict`-only change is real BREAKING output, so `cliguard accept` needs the same flag to find it - `cliguard accept ./bin/cli.js "root -> copy" --strict --reason "..."` - without it, `accept` compares in default (non-strict) mode and won't see the change at all.
+
 ## Programmatic API
 
 Everything above is the CLI. The same extraction and diff logic is also available as a library, for a custom build script, monorepo tool, or bot that wants to embed a contract check without spawning `npx cliguard` as a subprocess:
@@ -324,6 +326,7 @@ jobs:
           entry: ./bin/cli.js
           # adapter: yargs        # default: commander
           # comment-on-pr: false  # default: true
+          # strict: true          # default: false
 ```
 
 Set `comment-on-pr: false` to keep the exit-code gate without the comment, or use the raw CLI directly for a non-GitHub CI provider:

@@ -17,6 +17,10 @@ inputs:
     description: "Post (and keep updated in place) a PR comment summarizing the result. No-op outside a pull_request event. Needs `permissions: pull-requests: write` on the calling workflow/job."
     required: false
     default: "true"
+  strict:
+    description: "Enable extra rules for currently-silent risky changes (e.g. a positional argument reorder). Same as running `cliguard check --strict` locally."
+    required: false
+    default: "false"
 
 runs:
   using: "composite"
@@ -25,7 +29,9 @@ runs:
       shell: bash
       run: |
         set +e
-        npx cliguard check "${{ inputs.entry }}" --adapter "${{ inputs.adapter }}" --json > cliguard-result.json 2> cliguard-stderr.txt
+        STRICT_FLAG=""
+        if [ "${{ inputs.strict }}" = "true" ]; then STRICT_FLAG="--strict"; fi
+        npx cliguard check "${{ inputs.entry }}" --adapter "${{ inputs.adapter }}" $STRICT_FLAG --json > cliguard-result.json 2> cliguard-stderr.txt
         echo "exit-code=$?" >> "$GITHUB_OUTPUT"
         set -e
         cat cliguard-result.json

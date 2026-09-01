@@ -858,6 +858,50 @@ describe("cliguard CLI (subprocess)", () => {
     }
   });
 
+  it("accept --strict can acknowledge a positional argument reorder that only --strict detects", () => {
+    const { dir, cleanup } = makeTempDir();
+    const withCopyCommand = (source: string) =>
+      source.replace(
+        "module.exports = { program };",
+        [
+          'program.command("copy").argument("<src>", "source").argument("<dest>", "destination").action(() => {});',
+          "",
+          "module.exports = { program };",
+        ].join("\n"),
+      );
+    const original = writeModifiedFixture(withCopyCommand);
+    const reordered = writeModifiedFixture((source) =>
+      withCopyCommand(source).replace(
+        '.argument("<src>", "source").argument("<dest>", "destination")',
+        '.argument("<dest>", "destination").argument("<src>", "source")',
+      ),
+    );
+    const changePath = "root -> copy";
+    try {
+      runCli(dir, ["init", original.path]);
+
+      const acceptResult = runCli(dir, [
+        "accept",
+        reordered.path,
+        changePath,
+        "--strict",
+        "--reason",
+        "deliberate reorder for v2",
+      ]);
+      expect(acceptResult.status).toBe(0);
+      expect(acceptResult.output).toContain("✅ Accepted");
+
+      const { status, output } = runCli(dir, ["check", reordered.path, "--strict"]);
+      expect(status).toBe(0);
+      expect(output).toContain("🟣");
+      expect(output).toContain("deliberate reorder for v2");
+    } finally {
+      cleanup();
+      original.cleanup();
+      reordered.cleanup();
+    }
+  });
+
   it("doctor with no entry lists every registered adapter and its known limitations", () => {
     const { dir, cleanup } = makeTempDir();
     try {

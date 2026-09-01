@@ -205,8 +205,17 @@ program
   )
   .requiredOption("-r, --reason <text>", "why this break is intentional - shown in check output")
   .option(...adapterOption)
+  .option(
+    "--strict",
+    "match against the same --strict rules used to find this change (e.g. a positional argument reorder) - required to accept one, since it's otherwise invisible to the default comparison",
+    false,
+  )
   .action(
-    async (entry: string, changePath: string, options: { reason: string; adapter: string }) => {
+    async (
+      entry: string,
+      changePath: string,
+      options: { reason: string; adapter: string; strict: boolean },
+    ) => {
       const exitCode = await withSuppressedExit(async () => {
         const reason = options.reason.trim();
         if (!reason) {
@@ -220,7 +229,10 @@ program
         const newContract = await resolveAdapter(options.adapter).extract(entry);
         const diff = applyDeprecations(
           diffEngine.applyUnstableMarkers(
-            applyConfig(diffEngine.compare(oldContract, newContract), loadConfig()),
+            applyConfig(
+              diffEngine.compare(oldContract, newContract, { strict: options.strict }),
+              loadConfig(),
+            ),
             oldContract,
             newContract,
           ),

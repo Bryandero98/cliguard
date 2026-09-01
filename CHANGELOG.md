@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-09-01
+
+### Fixed
+
+- `cliguard accept` gains `--strict`: a `--strict`-only change (e.g. a
+  positional argument reorder) is real `BREAKING` output, but `accept` was
+  always comparing in default mode, so it could never find - and therefore
+  never acknowledge - the exact change `check --strict` had just reported.
+  There was no way to accept one at all.
+- The bundled GitHub Action (`action.yml`) gains a `strict` input, wired
+  through to `cliguard check --strict`. `--strict` shipped in 0.7.0 but was
+  only reachable by running the CLI directly - anyone using the recommended
+  Action-based CI setup had no way to turn it on.
+
 ## [0.7.0] - 2026-09-01
 
 ### Added
@@ -180,6 +194,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - A corrupt `.cliguard/contract.json` now names the file and suggests the
   fix instead of a generic parse error.
 
+[0.7.1]: https://github.com/Bryandero98/cliguard/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/Bryandero98/cliguard/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/Bryandero98/cliguard/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/Bryandero98/cliguard/compare/v0.4.0...v0.5.0
