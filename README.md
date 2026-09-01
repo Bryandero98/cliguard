@@ -180,6 +180,20 @@ It respects `.cliguard/accepted-breaks.json` the same way `check` does, and exit
 npx cliguard preview ./bin/cli.js --adapter yargs
 ```
 
+### Checking an adapter's real limitations, or sanity-checking one against your CLI
+
+Every adapter has a couple of real, framework-shape gaps (see "Supported frameworks" below) - `cliguard doctor` surfaces them directly instead of leaving them to a code comment only a maintainer would read:
+
+```sh
+npx cliguard doctor
+```
+
+Pass an entry file to also run a real extraction against it and get a quick structural summary (or the real failure, if extraction doesn't work) instead of a full contract dump:
+
+```sh
+npx cliguard doctor ./bin/cli.js --adapter yargs
+```
+
 ### Catching a breaking change before it reaches CI
 
 `cliguard install-hook <entry>` installs a git hook (`pre-push` by default) that runs `cliguard check` automatically, so a breaking change is caught locally instead of waiting for CI to say so:

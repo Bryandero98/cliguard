@@ -27,6 +27,11 @@ import { loadModule } from "./load-module";
  */
 export class CacAdapter implements CliAdapter {
   readonly id = "cac";
+  readonly limitations: readonly string[] = [
+    'OptionContract.required is always false - CAC has no declarative "this option must be passed" concept.',
+    "CommandContract.subcommands is always [] - CAC's commands are a flat list, not a tree.",
+    'ArgumentContract.description is always "" - CAC\'s positional args carry no description field.',
+  ];
 
   async extract(entryPath: string): Promise<Contract> {
     const cli = await this.loadCac(entryPath);

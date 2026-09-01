@@ -87,6 +87,9 @@ const YARGS_STRING_MARKER = "__yargsString__:";
  */
 export class YargsAdapter implements CliAdapter {
   readonly id = "yargs";
+  readonly limitations: readonly string[] = [
+    "Each command's options are read from a fresh, isolated yargs instance built by re-running that command's builder, not the shared instance the target CLI actually built - see this class's own doc comment for why.",
+  ];
 
   async extract(entryPath: string): Promise<Contract> {
     const cli = await this.loadYargs(entryPath);

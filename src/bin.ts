@@ -27,7 +27,12 @@ import {
   writeDeprecations,
   writeHook,
 } from "./core/storage";
-import { ChangeType, type AcceptedBreak, type Deprecation } from "./core/types";
+import {
+  ChangeType,
+  type AcceptedBreak,
+  type CommandContract,
+  type Deprecation,
+} from "./core/types";
 
 // Constructing an adapter here is cheap (no eager require of its
 // framework - CacAdapter only loads `cac` lazily, inside extract()), so
@@ -306,6 +311,49 @@ program
     process.exit(exitCode);
   });
 
+program
+  .command("doctor")
+  .description(
+    "Show every adapter's known limitations, or sanity-check one against a real entry file",
+  )
+  .argument("[entry]", "optional: path to a target CLI's entry file to actually test extraction")
+  .option(...adapterOption)
+  .action(async (entry: string | undefined, options: { adapter: string }) => {
+    if (!entry) {
+      printAdapterLimitations();
+      process.exit(0);
+    }
+
+    const exitCode = await withSuppressedExit(async () => {
+      const adapter = resolveAdapter(options.adapter);
+      console.log(`Adapter: ${adapter.id}`);
+      if (adapter.limitations.length === 0) {
+        console.log("  No known limitations.");
+      } else {
+        for (const limitation of adapter.limitations) {
+          console.log(`  ⚠️  ${limitation}`);
+        }
+      }
+      console.log("");
+
+      try {
+        const contract = await adapter.extract(entry);
+        const summary = summarizeCommand(contract.root);
+        console.log(
+          `✅ Extraction succeeded: ${summary.commands} command(s), ` +
+            `${summary.options} option(s), ${summary.arguments} argument(s).`,
+        );
+        return 0;
+      } catch (error) {
+        console.error(
+          `❌ Extraction failed: ${error instanceof Error ? error.message : String(error)}`,
+        );
+        return 1;
+      }
+    });
+    process.exit(exitCode);
+  });
+
 const HOOK_NAMES = ["pre-commit", "pre-push"] as const;
 type HookName = (typeof HOOK_NAMES)[number];
 
@@ -407,6 +455,40 @@ function buildCiWorkflowYaml(entryPath: string, adapter: string): string {
     lines.push(`          adapter: ${adapter}`);
   }
   return lines.join("\n") + "\n";
+}
+
+function printAdapterLimitations(): void {
+  console.log("Registered adapters and their known limitations:\n");
+  for (const adapter of Object.values(adapters)) {
+    console.log(adapter.id + ":");
+    if (adapter.limitations.length === 0) {
+      console.log("  No known limitations.");
+    } else {
+      for (const limitation of adapter.limitations) {
+        console.log(`  ⚠️  ${limitation}`);
+      }
+    }
+    console.log("");
+  }
+}
+
+interface ContractSummary {
+  readonly commands: number;
+  readonly options: number;
+  readonly arguments: number;
+}
+
+function summarizeCommand(cmd: CommandContract): ContractSummary {
+  let commands = 1;
+  let options = cmd.options.length;
+  let args = cmd.arguments.length;
+  for (const sub of cmd.subcommands) {
+    const subSummary = summarizeCommand(sub);
+    commands += subSummary.commands;
+    options += subSummary.options;
+    args += subSummary.arguments;
+  }
+  return { commands, options, arguments: args };
 }
 
 function isHookName(value: string): value is HookName {

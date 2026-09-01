@@ -33,6 +33,8 @@ interface CommanderArgumentLike {
  */
 export class CommanderAdapter implements CliAdapter {
   readonly id = "commander";
+  /** No known gaps - Commander's own object graph exposes everything a Contract needs directly. */
+  readonly limitations: readonly string[] = [];
 
   async extract(entryPath: string): Promise<Contract> {
     const program = await this.loadCommand(entryPath);

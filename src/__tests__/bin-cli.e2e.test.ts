@@ -858,6 +858,64 @@ describe("cliguard CLI (subprocess)", () => {
     }
   });
 
+  it("doctor with no entry lists every registered adapter and its known limitations", () => {
+    const { dir, cleanup } = makeTempDir();
+    try {
+      const { status, output } = runCli(dir, ["doctor"]);
+      expect(status).toBe(0);
+      expect(output).toContain("commander:");
+      expect(output).toContain("No known limitations.");
+      expect(output).toContain("cac:");
+      expect(output).toContain("yargs:");
+      expect(output).toContain("no declarative");
+      expect(output).toContain("fresh, isolated yargs instance");
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("doctor <entry> tests real extraction and reports a structural summary", () => {
+    const { dir, cleanup } = makeTempDir();
+    try {
+      const { status, output } = runCli(dir, ["doctor", FIXTURE]);
+      expect(status).toBe(0);
+      expect(output).toContain("Adapter: commander");
+      expect(output).toContain("No known limitations.");
+      expect(output).toContain("✅ Extraction succeeded");
+      expect(output).toContain("command(s)");
+      expect(output).toContain("option(s)");
+      expect(output).toContain("argument(s)");
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("doctor <entry> --adapter cac reports cac's real, known limitations", () => {
+    const { dir, cleanup } = makeTempDir();
+    const cacFixture = path.join(__dirname, "..", "__fixtures__", "basic-cac-cli.js");
+    try {
+      const { status, output } = runCli(dir, ["doctor", cacFixture, "--adapter", "cac"]);
+      expect(status).toBe(0);
+      expect(output).toContain("Adapter: cac");
+      expect(output).toContain("no declarative");
+      expect(output).toContain("flat list, not a tree");
+      expect(output).toContain("✅ Extraction succeeded");
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("doctor <entry> reports a real extraction failure instead of crashing", () => {
+    const { dir, cleanup } = makeTempDir();
+    try {
+      const { status, output } = runCli(dir, ["doctor", "./does-not-exist.js"]);
+      expect(status).toBe(1);
+      expect(output).toContain("❌ Extraction failed");
+    } finally {
+      cleanup();
+    }
+  });
+
   it("--version prints the version from package.json", () => {
     const { dir, cleanup } = makeTempDir();
     try {

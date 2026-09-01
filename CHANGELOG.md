@@ -21,6 +21,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   instead of the `.cliguard/contract.json` on disk. Removes the single
   biggest source of CI friction: a PR branch no longer needs its own
   freshly-checked-out baseline file just to run `check`.
+- `cliguard doctor [entry]`: lists every registered adapter's real,
+  framework-shape limitations (e.g. CAC can't express "this option is
+  required"), previously visible only by reading adapter source. With an
+  `entry`, also tests real extraction against it and reports a structural
+  summary (command/option/argument counts) or the real failure. `CliAdapter`
+  gained a `limitations: readonly string[]` field, filled in per adapter.
 - `--strict` on `check`/`diff`: enables extra rules for changes that are
   currently silent but can still break an existing caller - today, a pure
   reorder of a command's positional arguments (same names, different
