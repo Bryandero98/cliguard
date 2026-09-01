@@ -916,6 +916,110 @@ describe("cliguard CLI (subprocess)", () => {
     }
   });
 
+  it("check --format junit prints valid-looking JUnit XML with a <failure> for a real BREAKING change", () => {
+    const { dir, cleanup } = makeTempDir();
+    const fixture = writeModifiedFixture((source) =>
+      source
+        .split("\n")
+        .filter((line) => !line.includes(".requiredOption("))
+        .join("\n"),
+    );
+    try {
+      runCli(dir, ["init", FIXTURE]);
+
+      const { status, output } = runCli(dir, ["check", fixture.path, "--format", "junit"]);
+      expect(status).toBe(1);
+      expect(output).toContain('<?xml version="1.0" encoding="UTF-8"?>');
+      expect(output).toContain("<testsuite");
+      expect(output).toContain("<failure");
+      expect(output).toContain("root -&gt; build -&gt; option[--target]");
+    } finally {
+      cleanup();
+      fixture.cleanup();
+    }
+  });
+
+  it("check --format gitlab-codequality prints a GitLab Code Quality JSON array with blocker severity", () => {
+    const { dir, cleanup } = makeTempDir();
+    const fixture = writeModifiedFixture((source) =>
+      source
+        .split("\n")
+        .filter((line) => !line.includes(".requiredOption("))
+        .join("\n"),
+    );
+    try {
+      runCli(dir, ["init", FIXTURE]);
+
+      const { status, output } = runCli(dir, [
+        "check",
+        fixture.path,
+        "--format",
+        "gitlab-codequality",
+      ]);
+      expect(status).toBe(1);
+      const issues = JSON.parse(output) as {
+        severity: string;
+        description: string;
+        fingerprint: string;
+      }[];
+      expect(issues).toHaveLength(1);
+      expect(issues[0].severity).toBe("blocker");
+      expect(issues[0].description).toContain("root -> build -> option[--target]");
+    } finally {
+      cleanup();
+      fixture.cleanup();
+    }
+  });
+
+  it("check --format junit reports 0 failures and no <failure> when the contract is intact", () => {
+    const { dir, cleanup } = makeTempDir();
+    try {
+      runCli(dir, ["init", FIXTURE]);
+
+      const { status, output } = runCli(dir, ["check", FIXTURE, "--format", "junit"]);
+      expect(status).toBe(0);
+      expect(output).toContain('failures="0"');
+      expect(output).not.toContain("<failure");
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("check --format rejects an unknown format name", () => {
+    const { dir, cleanup } = makeTempDir();
+    try {
+      runCli(dir, ["init", FIXTURE]);
+
+      const { status, output } = runCli(dir, ["check", FIXTURE, "--format", "yaml"]);
+      expect(status).toBe(1);
+      expect(output).toContain("unknown --format");
+      expect(output).toContain("junit");
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("diff --format junit works the same way check --format junit does, on two contract files directly", () => {
+    const { dir, cleanup } = makeTempDir();
+    try {
+      runCli(dir, ["init", FIXTURE]);
+      const contractPath = path.join(dir, ".cliguard", "contract.json");
+
+      const { status, output } = runCli(dir, [
+        "diff",
+        contractPath,
+        contractPath,
+        "--format",
+        "junit",
+      ]);
+      expect(status).toBe(0);
+      expect(output).toContain('<?xml version="1.0" encoding="UTF-8"?>');
+      expect(output).toContain('tests="0"');
+    } finally {
+      cleanup();
+    }
+  });
+
   it("--version prints the version from package.json", () => {
     const { dir, cleanup } = makeTempDir();
     try {

@@ -236,6 +236,20 @@ Off by default so it never changes behavior for an existing CI config - opt in p
 
 Full rules live in [`src/core/diff.engine.ts`](src/core/diff.engine.ts) - it's the one file worth reading if you want to know exactly why something was flagged.
 
+### Reports for non-GitHub CI
+
+The bundled GitHub Action is the recommended path on GitHub, but `check`/`diff` can also emit two other formats directly, no Action or bespoke reporter needed:
+
+```sh
+# JUnit XML - understood natively by Jenkins, CircleCI, Azure DevOps, and GitLab's own JUnit widget
+npx cliguard check ./bin/cli.js --format junit > cliguard-report.xml
+
+# GitLab Code Quality JSON - surfaced as inline annotations on a GitLab merge request
+npx cliguard check ./bin/cli.js --format gitlab-codequality > gl-code-quality-report.json
+```
+
+Same exit code either way - `1` on an unacknowledged BREAKING change, `0` otherwise - so either drops straight into a CI job that already fails the build on a non-zero exit.
+
 ## CI integration
 
 `cliguard init --with-ci` scaffolds the workflow below for you - `git add .github/workflows/cliguard.yml` and you're done. Prefer to see it first, or wire it up by hand? Read on.

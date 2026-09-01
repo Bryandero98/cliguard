@@ -7,6 +7,7 @@ import { CacAdapter } from "./adapters/cac.adapter";
 import { CommanderAdapter } from "./adapters/commander.adapter";
 import { YargsAdapter } from "./adapters/yargs.adapter";
 import { DiffEngine, type DiffResult } from "./core/diff.engine";
+import { toGitLabCodeQuality, toJUnitXml } from "./core/report-formats";
 import {
   ciWorkflowExists,
   contractExists,
@@ -73,6 +74,29 @@ const adapterOption = [
   "commander",
 ] as const;
 
+const REPORT_FORMATS = ["text", "json", "junit", "gitlab-codequality"] as const;
+type ReportFormat = (typeof REPORT_FORMATS)[number];
+
+/** `--json` is a shorthand kept for backward compatibility - equivalent to `--format json` when no explicit `--format` is given. Returns null for an unrecognized `--format` value, distinct from every valid one including "text". */
+function resolveFormat(explicit: string | undefined, jsonFlag: boolean): ReportFormat | null {
+  const format = explicit ?? (jsonFlag ? "json" : "text");
+  return (REPORT_FORMATS as readonly string[]).includes(format) ? (format as ReportFormat) : null;
+}
+
+/** Renders every format except "text" (which each command still prints itself, since its "nothing changed" message differs between `check` and `diff`). */
+function formatReport(
+  diff: readonly DiffResult[],
+  acceptedPaths: ReadonlyMap<string, AcceptedBreak>,
+  format: Exclude<ReportFormat, "text">,
+  contractPath: string,
+): string {
+  if (format === "json") {
+    return JSON.stringify(toJsonResult(diff, acceptedPaths), null, 2);
+  }
+  const annotated = annotateChanges(diff, acceptedPaths);
+  return format === "junit" ? toJUnitXml(annotated) : toGitLabCodeQuality(annotated, contractPath);
+}
+
 program
   .command("init")
   .description("Capture the current CLI surface as the committed contract")
@@ -114,7 +138,12 @@ program
   .description("Compare the current CLI surface against the committed contract")
   .argument("<entry>", "path to the target CLI's entry file")
   .option(...adapterOption)
-  .option("--json", "print a machine-readable JSON result instead of text", false)
+  .option(
+    "--json",
+    "print a machine-readable JSON result instead of text (shorthand for --format json)",
+    false,
+  )
+  .option("--format <format>", `output format: ${REPORT_FORMATS.join(", ")}`)
   .option(
     "--against <ref>",
     "compare against a git ref's committed contract (e.g. origin/main, a tag, a commit sha) instead of the .cliguard/contract.json on disk",
@@ -127,9 +156,23 @@ program
   .action(
     async (
       entry: string,
-      options: { adapter: string; json: boolean; against?: string; strict: boolean },
+      options: {
+        adapter: string;
+        json: boolean;
+        format?: string;
+        against?: string;
+        strict: boolean;
+      },
     ) => {
       const exitCode = await withSuppressedExit(async () => {
+        const format = resolveFormat(options.format, options.json);
+        if (!format) {
+          console.error(
+            `cliguard: unknown --format "${options.format}". Use ${REPORT_FORMATS.join(", ")}.`,
+          );
+          return 1;
+        }
+
         const oldContract = options.against ? readContractAtRef(options.against) : readContract();
         const newContract = await resolveAdapter(options.adapter).extract(entry);
         const diff = applyDeprecations(
@@ -141,8 +184,8 @@ program
           (change) => change.type === ChangeType.BREAKING && !acceptedPaths.has(change.path),
         );
 
-        if (options.json) {
-          console.log(JSON.stringify(toJsonResult(diff, acceptedPaths), null, 2));
+        if (format !== "text") {
+          console.log(formatReport(diff, acceptedPaths, format, getContractDisplayPath()));
           return hasBreaking ? 1 : 0;
         }
 
@@ -389,41 +432,60 @@ program
   .description("Compare two contract files directly, without running any CLI")
   .argument("<oldContract>", "path to the older contract JSON file")
   .argument("<newContract>", "path to the newer contract JSON file")
-  .option("--json", "print a machine-readable JSON result instead of text", false)
+  .option(
+    "--json",
+    "print a machine-readable JSON result instead of text (shorthand for --format json)",
+    false,
+  )
+  .option("--format <format>", `output format: ${REPORT_FORMATS.join(", ")}`)
   .option(
     "--strict",
     "enable extra rules for currently-silent risky changes (e.g. a positional argument reorder)",
     false,
   )
-  .action((oldPath: string, newPath: string, options: { json: boolean; strict: boolean }) => {
-    // No adapter, no target CLI ever loaded here - just two files off
-    // disk - so none of withSuppressedExit's process.exit-race concerns
-    // apply. A thrown Error (bad path, corrupt JSON) still surfaces via
-    // this program's own top-level parseAsync().catch() below.
-    const oldContract = readContractFile(oldPath);
-    const newContract = readContractFile(newPath);
-    const diff = applyDeprecations(
-      diffEngine.compare(oldContract, newContract, { strict: options.strict }),
-      indexDeprecations(readDeprecations()),
-    );
-    const acceptedPaths = indexAcceptedBreaks(readAcceptedBreaks());
-    const hasBreaking = diff.some(
-      (change) => change.type === ChangeType.BREAKING && !acceptedPaths.has(change.path),
-    );
+  .action(
+    (
+      oldPath: string,
+      newPath: string,
+      options: { json: boolean; format?: string; strict: boolean },
+    ) => {
+      // No adapter, no target CLI ever loaded here - just two files off
+      // disk - so none of withSuppressedExit's process.exit-race concerns
+      // apply. A thrown Error (bad path, corrupt JSON) still surfaces via
+      // this program's own top-level parseAsync().catch() below.
+      const format = resolveFormat(options.format, options.json);
+      if (!format) {
+        console.error(
+          `cliguard: unknown --format "${options.format}". Use ${REPORT_FORMATS.join(", ")}.`,
+        );
+        process.exit(1);
+      }
 
-    if (options.json) {
-      console.log(JSON.stringify(toJsonResult(diff, acceptedPaths), null, 2));
+      const oldContract = readContractFile(oldPath);
+      const newContract = readContractFile(newPath);
+      const diff = applyDeprecations(
+        diffEngine.compare(oldContract, newContract, { strict: options.strict }),
+        indexDeprecations(readDeprecations()),
+      );
+      const acceptedPaths = indexAcceptedBreaks(readAcceptedBreaks());
+      const hasBreaking = diff.some(
+        (change) => change.type === ChangeType.BREAKING && !acceptedPaths.has(change.path),
+      );
+
+      if (format !== "text") {
+        console.log(formatReport(diff, acceptedPaths, format, newPath));
+        process.exit(hasBreaking ? 1 : 0);
+      }
+
+      if (diff.length === 0) {
+        console.log("✅ Contracts are identical.");
+        process.exit(0);
+      }
+
+      printDiff(diff, acceptedPaths);
       process.exit(hasBreaking ? 1 : 0);
-    }
-
-    if (diff.length === 0) {
-      console.log("✅ Contracts are identical.");
-      process.exit(0);
-    }
-
-    printDiff(diff, acceptedPaths);
-    process.exit(hasBreaking ? 1 : 0);
-  });
+    },
+  );
 
 /**
  * The same workflow the README's "CI integration" section documents by
@@ -604,15 +666,23 @@ interface JsonCheckResult {
   readonly suggestedBump: SuggestedBump;
 }
 
-function toJsonResult(
+/** A BREAKING entry matched by `cliguard accept` gains `acknowledged: true` and its recorded `reason`; every other entry passes through unchanged. Shared by --json, --format junit, and --format gitlab-codequality so all three agree on what "acknowledged" means. */
+function annotateChanges(
   diff: readonly DiffResult[],
   acceptedPaths: ReadonlyMap<string, AcceptedBreak>,
-): JsonCheckResult {
-  const changes: JsonChangeResult[] = diff.map((entry) => {
+): JsonChangeResult[] {
+  return diff.map((entry) => {
     if (entry.type !== ChangeType.BREAKING) return entry;
     const accepted = acceptedPaths.get(entry.path);
     return accepted ? { ...entry, acknowledged: true, reason: accepted.reason } : entry;
   });
+}
+
+function toJsonResult(
+  diff: readonly DiffResult[],
+  acceptedPaths: ReadonlyMap<string, AcceptedBreak>,
+): JsonCheckResult {
+  const changes = annotateChanges(diff, acceptedPaths);
 
   const summary = {
     breaking: changes.filter(

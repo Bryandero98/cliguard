@@ -21,6 +21,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   instead of the `.cliguard/contract.json` on disk. Removes the single
   biggest source of CI friction: a PR branch no longer needs its own
   freshly-checked-out baseline file just to run `check`.
+- `--format <junit|gitlab-codequality>` on `check`/`diff` (alongside the
+  existing `text`/`json`, still the default and `--json` respectively):
+  a JUnit XML report (one `<testcase>` per changed path, a `<failure>`
+  for each unacknowledged BREAKING one) consumable by Jenkins, CircleCI,
+  Azure DevOps, and GitLab's own JUnit widget with zero cliguard-specific
+  tooling; a GitLab Code Quality JSON report for GitLab's native MR
+  annotations. cliguard was GitHub-only until now.
 - `cliguard doctor [entry]`: lists every registered adapter's real,
   framework-shape limitations (e.g. CAC can't express "this option is
   required"), previously visible only by reading adapter source. With an
