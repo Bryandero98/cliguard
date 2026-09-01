@@ -7,7 +7,7 @@ import { CacAdapter } from "./adapters/cac.adapter";
 import { CommanderAdapter } from "./adapters/commander.adapter";
 import { YargsAdapter } from "./adapters/yargs.adapter";
 import { DiffEngine, type DiffResult } from "./core/diff.engine";
-import { toGitLabCodeQuality, toJUnitXml } from "./core/report-formats";
+import { toGitLabCodeQuality, toJUnitXml, toRdjsonl } from "./core/report-formats";
 import {
   ciWorkflowExists,
   contractExists,
@@ -74,7 +74,7 @@ const adapterOption = [
   "commander",
 ] as const;
 
-const REPORT_FORMATS = ["text", "json", "junit", "gitlab-codequality"] as const;
+const REPORT_FORMATS = ["text", "json", "junit", "gitlab-codequality", "rdjsonl"] as const;
 type ReportFormat = (typeof REPORT_FORMATS)[number];
 
 /** `--json` is a shorthand kept for backward compatibility - equivalent to `--format json` when no explicit `--format` is given. Returns null for an unrecognized `--format` value, distinct from every valid one including "text". */
@@ -94,7 +94,14 @@ function formatReport(
     return JSON.stringify(toJsonResult(diff, acceptedPaths), null, 2);
   }
   const annotated = annotateChanges(diff, acceptedPaths);
-  return format === "junit" ? toJUnitXml(annotated) : toGitLabCodeQuality(annotated, contractPath);
+  switch (format) {
+    case "junit":
+      return toJUnitXml(annotated);
+    case "gitlab-codequality":
+      return toGitLabCodeQuality(annotated, contractPath);
+    case "rdjsonl":
+      return toRdjsonl(annotated, contractPath);
+  }
 }
 
 program

@@ -1,4 +1,9 @@
-import { toGitLabCodeQuality, toJUnitXml, type ReportChange } from "../core/report-formats";
+import {
+  toGitLabCodeQuality,
+  toJUnitXml,
+  toRdjsonl,
+  type ReportChange,
+} from "../core/report-formats";
 import { ChangeType } from "../core/types";
 
 describe("toJUnitXml", () => {
@@ -104,5 +109,59 @@ describe("toGitLabCodeQuality", () => {
 
     expect(issuesA[0].fingerprint).not.toBe(issuesA[1].fingerprint);
     expect(issuesA[0].fingerprint).toBe(issuesB[0].fingerprint);
+  });
+});
+
+describe("toRdjsonl", () => {
+  it("emits one JSON object per line, not a JSON array", () => {
+    const changes: ReportChange[] = [
+      { type: ChangeType.BREAKING, path: "root -> option[--a]", message: "removed" },
+      { type: ChangeType.ADDITIVE, path: "root -> option[--b]", message: "added" },
+    ];
+
+    const lines = toRdjsonl(changes, ".cliguard/contract.json").split("\n");
+
+    expect(lines).toHaveLength(2);
+    for (const line of lines) {
+      expect(() => JSON.parse(line)).not.toThrow();
+    }
+  });
+
+  it("maps an unacknowledged BREAKING change to ERROR severity", () => {
+    const changes: ReportChange[] = [
+      { type: ChangeType.BREAKING, path: "root -> option[--target]", message: "removed" },
+    ];
+
+    const [diagnostic] = toRdjsonl(changes, ".cliguard/contract.json")
+      .split("\n")
+      .map((line) => JSON.parse(line));
+
+    expect(diagnostic.severity).toBe("ERROR");
+    expect(diagnostic.code.value).toBe("root -> option[--target]");
+    expect(diagnostic.location.path).toBe(".cliguard/contract.json");
+  });
+
+  it("maps an acknowledged BREAKING change to INFO, and a PATCH to WARNING", () => {
+    const changes: ReportChange[] = [
+      {
+        type: ChangeType.BREAKING,
+        path: "root -> option[--target]",
+        message: "removed",
+        acknowledged: true,
+        reason: "intentional",
+      },
+      { type: ChangeType.PATCH, path: "root -> option[--verbose]", message: "description changed" },
+    ];
+
+    const [acknowledged, patch] = toRdjsonl(changes, ".cliguard/contract.json")
+      .split("\n")
+      .map((line) => JSON.parse(line));
+
+    expect(acknowledged.severity).toBe("INFO");
+    expect(patch.severity).toBe("WARNING");
+  });
+
+  it("returns an empty string for no changes", () => {
+    expect(toRdjsonl([], ".cliguard/contract.json")).toBe("");
   });
 });

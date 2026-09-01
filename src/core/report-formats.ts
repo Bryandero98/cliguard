@@ -99,3 +99,34 @@ export function toGitLabCodeQuality(
 
   return JSON.stringify(issues, null, 2);
 }
+
+type RdjsonlSeverity = "ERROR" | "WARNING" | "INFO";
+
+function rdjsonlSeverityFor(change: ReportChange): RdjsonlSeverity {
+  if (change.type === ChangeType.BREAKING) return change.acknowledged ? "INFO" : "ERROR";
+  if (change.type === ChangeType.PATCH) return "WARNING";
+  return "INFO"; // ADDITIVE
+}
+
+/**
+ * reviewdog's own Diagnostic Format, one JSON object per line (rdjsonl) -
+ * NOT a JSON array, reviewdog reads it as a stream. Piping this into
+ * `reviewdog -f=rdjsonl -reporter=<...>` hands off posting the diff to
+ * whichever platform reviewdog already has a reporter for (GitHub,
+ * GitLab, Bitbucket, a local checkstyle-style report), instead of
+ * cliguard maintaining a bespoke reporter per platform itself. Same
+ * file+line limitation and same fallback (the contract file, line 1) as
+ * `toGitLabCodeQuality` - reviewdog's format is just as file-shaped.
+ */
+export function toRdjsonl(changes: readonly ReportChange[], contractPath: string): string {
+  return changes
+    .map((change) =>
+      JSON.stringify({
+        message: `[${change.type}] ${change.message}`,
+        location: { path: contractPath, range: { start: { line: 1, column: 1 } } },
+        severity: rdjsonlSeverityFor(change),
+        code: { value: change.path },
+      }),
+    )
+    .join("\n");
+}

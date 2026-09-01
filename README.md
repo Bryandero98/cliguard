@@ -248,7 +248,13 @@ npx cliguard check ./bin/cli.js --format junit > cliguard-report.xml
 npx cliguard check ./bin/cli.js --format gitlab-codequality > gl-code-quality-report.json
 ```
 
-Same exit code either way - `1` on an unacknowledged BREAKING change, `0` otherwise - so either drops straight into a CI job that already fails the build on a non-zero exit.
+A third format, `--format rdjsonl`, emits [reviewdog](https://github.com/reviewdog/reviewdog)'s own Diagnostic Format instead of a report cliguard renders itself - hand it off to whichever platform reviewdog already has a reporter for:
+
+```sh
+npx cliguard check ./bin/cli.js --format rdjsonl | reviewdog -f=rdjsonl -reporter=github-pr-review
+```
+
+Same exit code either way - `1` on an unacknowledged BREAKING change, `0` otherwise - so any of the three drops straight into a CI job that already fails the build on a non-zero exit.
 
 ## CI integration
 

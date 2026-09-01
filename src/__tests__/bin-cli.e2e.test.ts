@@ -1020,6 +1020,30 @@ describe("cliguard CLI (subprocess)", () => {
     }
   });
 
+  it("check --format rdjsonl prints one JSON diagnostic per line, ERROR severity for a real BREAKING change", () => {
+    const { dir, cleanup } = makeTempDir();
+    const fixture = writeModifiedFixture((source) =>
+      source
+        .split("\n")
+        .filter((line) => !line.includes(".requiredOption("))
+        .join("\n"),
+    );
+    try {
+      runCli(dir, ["init", FIXTURE]);
+
+      const { status, output } = runCli(dir, ["check", fixture.path, "--format", "rdjsonl"]);
+      expect(status).toBe(1);
+      const lines = output.trim().split("\n");
+      expect(lines).toHaveLength(1);
+      const diagnostic = JSON.parse(lines[0]) as { severity: string; code: { value: string } };
+      expect(diagnostic.severity).toBe("ERROR");
+      expect(diagnostic.code.value).toBe("root -> build -> option[--target]");
+    } finally {
+      cleanup();
+      fixture.cleanup();
+    }
+  });
+
   it("--version prints the version from package.json", () => {
     const { dir, cleanup } = makeTempDir();
     try {

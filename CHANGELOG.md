@@ -21,6 +21,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   instead of the `.cliguard/contract.json` on disk. Removes the single
   biggest source of CI friction: a PR branch no longer needs its own
   freshly-checked-out baseline file just to run `check`.
+- `--format rdjsonl` on `check`/`diff`: emits [reviewdog](https://github.com/reviewdog/reviewdog)'s
+  own Diagnostic Format (one JSON object per line). Piping it into
+  `reviewdog -f=rdjsonl -reporter=<...>` hands off posting the diff to
+  whichever platform reviewdog already has a reporter for, instead of
+  cliguard maintaining a bespoke one per platform.
 - `--format <junit|gitlab-codequality>` on `check`/`diff` (alongside the
   existing `text`/`json`, still the default and `--json` respectively):
   a JUnit XML report (one `<testcase>` per changed path, a `<failure>`
