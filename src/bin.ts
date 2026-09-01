@@ -161,9 +161,13 @@ program
         const oldContract = options.against ? readContractAtRef(options.against) : readContract();
         const newContract = await resolveAdapter(options.adapter).extract(entry);
         const diff = applyDeprecations(
-          applyConfig(
-            diffEngine.compare(oldContract, newContract, { strict: options.strict }),
-            loadConfig(),
+          diffEngine.applyUnstableMarkers(
+            applyConfig(
+              diffEngine.compare(oldContract, newContract, { strict: options.strict }),
+              loadConfig(),
+            ),
+            oldContract,
+            newContract,
           ),
           indexDeprecations(readDeprecations()),
         );
@@ -215,7 +219,11 @@ program
         const oldContract = readContract();
         const newContract = await resolveAdapter(options.adapter).extract(entry);
         const diff = applyDeprecations(
-          applyConfig(diffEngine.compare(oldContract, newContract), loadConfig()),
+          diffEngine.applyUnstableMarkers(
+            applyConfig(diffEngine.compare(oldContract, newContract), loadConfig()),
+            oldContract,
+            newContract,
+          ),
           indexDeprecations(readDeprecations()),
         );
         const match = diff.find(
@@ -452,9 +460,13 @@ program
       const oldContract = readContractFile(oldPath);
       const newContract = readContractFile(newPath);
       const diff = applyDeprecations(
-        applyConfig(
-          diffEngine.compare(oldContract, newContract, { strict: options.strict }),
-          loadConfig(),
+        diffEngine.applyUnstableMarkers(
+          applyConfig(
+            diffEngine.compare(oldContract, newContract, { strict: options.strict }),
+            loadConfig(),
+          ),
+          oldContract,
+          newContract,
         ),
         indexDeprecations(readDeprecations()),
       );

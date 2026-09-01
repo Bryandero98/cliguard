@@ -96,6 +96,70 @@ export class DiffEngine {
     }
   }
 
+  /**
+   * Every DiffResult.path whose own description contains `marker` - a
+   * command/option/argument the target CLI's own author has marked this
+   * way is signaling "not stable yet" right at the point where it's
+   * declared (inspired by `buf`'s `ignore_unstable_packages`), rather
+   * than through a separately maintained ignore list
+   * (`cliguard.config.js`) that can silently drift out of sync as flags
+   * get renamed, removed, or re-added under a different name.
+   */
+  collectUnstablePaths(contract: Contract, marker: string): Set<string> {
+    const paths = new Set<string>();
+    this.walkUnstable(contract.root, "root", marker, paths);
+    return paths;
+  }
+
+  private walkUnstable(
+    cmd: CommandContract,
+    path: string,
+    marker: string,
+    paths: Set<string>,
+  ): void {
+    if (cmd.description.includes(marker)) paths.add(path);
+    for (const option of cmd.options) {
+      if (option.description.includes(marker)) paths.add(`${path} -> option[--${option.name}]`);
+    }
+    for (const arg of cmd.arguments) {
+      if (arg.description.includes(marker)) paths.add(`${path} -> argument[<${arg.name}>]`);
+    }
+    for (const sub of cmd.subcommands) {
+      this.walkUnstable(sub, `${path} -> ${this.commandLabel(sub.name)}`, marker, paths);
+    }
+  }
+
+  /**
+   * Reclassifies a BREAKING change as PATCH when either side of the diff
+   * marks that path unstable - checking both the old *and* new contract
+   * matters because a removal only exists in the old one (the entry is
+   * simply gone from the new tree) while an added-then-changed entry only
+   * exists in the new one. `marker` defaults to `[unstable]`; every other
+   * kind of change (ADDITIVE, PATCH) is already non-blocking and left
+   * untouched either way.
+   */
+  applyUnstableMarkers(
+    diff: readonly DiffResult[],
+    oldContract: Contract,
+    newContract: Contract,
+    marker = "[unstable]",
+  ): DiffResult[] {
+    const unstable = new Set([
+      ...this.collectUnstablePaths(oldContract, marker),
+      ...this.collectUnstablePaths(newContract, marker),
+    ]);
+    if (unstable.size === 0) return diff as DiffResult[];
+
+    return diff.map((entry) => {
+      if (entry.type !== ChangeType.BREAKING || !unstable.has(entry.path)) return entry;
+      return {
+        ...entry,
+        type: ChangeType.PATCH,
+        message: `${entry.message} [unstable: exempt from breaking-change enforcement]`,
+      };
+    });
+  }
+
   private compareCommands(
     oldCmd: CommandContract,
     newCmd: CommandContract,

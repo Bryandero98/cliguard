@@ -394,4 +394,148 @@ describe("DiffEngine", () => {
       expect(diff.some((d) => d.message.includes("Argument order changed"))).toBe(false);
     });
   });
+
+  describe("unstable markers", () => {
+    it("collectUnstablePaths finds a command, option, and argument marked [unstable] in their own description", () => {
+      const contract = makeContract(
+        makeCommand({
+          subcommands: [
+            makeCommand({
+              name: "build",
+              description: "Build the project [unstable]",
+              options: [
+                {
+                  flags: "--fast",
+                  name: "fast",
+                  aliases: [],
+                  description: "skip checks [unstable]",
+                  required: false,
+                  valueType: "boolean",
+                  variadic: false,
+                  defaultValue: null,
+                },
+              ],
+              arguments: [
+                { name: "target", required: true, variadic: false, description: "[unstable]" },
+              ],
+            }),
+          ],
+        }),
+      );
+
+      const unstable = engine.collectUnstablePaths(contract, "[unstable]");
+
+      expect(unstable).toEqual(
+        new Set([
+          "root -> build",
+          "root -> build -> option[--fast]",
+          "root -> build -> argument[<target>]",
+        ]),
+      );
+    });
+
+    it("applyUnstableMarkers downgrades a BREAKING removal to PATCH when the OLD contract marked it unstable", () => {
+      const oldContract = makeContract(
+        makeCommand({
+          options: [
+            {
+              flags: "--fast",
+              name: "fast",
+              aliases: [],
+              description: "skip checks [unstable]",
+              required: true,
+              valueType: "boolean",
+              variadic: false,
+              defaultValue: null,
+            },
+          ],
+        }),
+      );
+      const newContract = makeContract(makeCommand({ options: [] }));
+
+      const diff = engine.applyUnstableMarkers(
+        engine.compare(oldContract, newContract),
+        oldContract,
+        newContract,
+      );
+
+      expect(diff).toContainEqual(
+        expect.objectContaining({
+          type: ChangeType.PATCH,
+          path: "root -> option[--fast]",
+          message: expect.stringContaining("[unstable: exempt from breaking-change enforcement]"),
+        }),
+      );
+    });
+
+    it("applyUnstableMarkers downgrades a BREAKING new-required-option when the NEW contract marks it unstable", () => {
+      const oldContract = makeContract(makeCommand({ options: [] }));
+      const newContract = makeContract(
+        makeCommand({
+          options: [
+            {
+              flags: "--fast",
+              name: "fast",
+              aliases: [],
+              description: "skip checks [unstable]",
+              required: true,
+              valueType: "boolean",
+              variadic: false,
+              defaultValue: null,
+            },
+          ],
+        }),
+      );
+
+      const diff = engine.applyUnstableMarkers(
+        engine.compare(oldContract, newContract),
+        oldContract,
+        newContract,
+      );
+
+      const entry = diff.find((d) => d.path === "root -> option[--fast]");
+      expect(entry?.type).toBe(ChangeType.PATCH);
+    });
+
+    it("leaves an unmarked BREAKING change alone", () => {
+      const oldContract = makeContract(
+        makeCommand({
+          arguments: [{ name: "target", required: true, variadic: false, description: "" }],
+        }),
+      );
+      const newContract = makeContract(makeCommand({ arguments: [] }));
+
+      const diff = engine.applyUnstableMarkers(
+        engine.compare(oldContract, newContract),
+        oldContract,
+        newContract,
+      );
+
+      expect(diff).toContainEqual(expect.objectContaining({ type: ChangeType.BREAKING }));
+    });
+
+    it("respects a custom marker string instead of the [unstable] default", () => {
+      const oldContract = makeContract(
+        makeCommand({ subcommands: [makeCommand({ name: "beta", description: "@experimental" })] }),
+      );
+      const newContract = makeContract(makeCommand({ subcommands: [] }));
+
+      const withDefaultMarker = engine.applyUnstableMarkers(
+        engine.compare(oldContract, newContract),
+        oldContract,
+        newContract,
+      );
+      expect(withDefaultMarker).toContainEqual(
+        expect.objectContaining({ type: ChangeType.BREAKING }),
+      );
+
+      const withCustomMarker = engine.applyUnstableMarkers(
+        engine.compare(oldContract, newContract),
+        oldContract,
+        newContract,
+        "@experimental",
+      );
+      expect(withCustomMarker).toContainEqual(expect.objectContaining({ type: ChangeType.PATCH }));
+    });
+  });
 });

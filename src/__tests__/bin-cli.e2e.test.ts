@@ -1120,6 +1120,58 @@ describe("cliguard CLI (subprocess)", () => {
     }
   });
 
+  it("a real [unstable]-marked option's removal reports as PATCH, not BREAKING", () => {
+    const { dir, cleanup } = makeTempDir();
+    // Marks --verbose unstable at the point it's declared, in the target
+    // CLI's own source - not in a separate ignore list.
+    const original = writeModifiedFixture((source) =>
+      source.replace(
+        '.option("--verbose", "verbose logging")',
+        '.option("--verbose", "verbose logging [unstable]")',
+      ),
+    );
+    const removed = writeModifiedFixture((source) =>
+      source
+        .split("\n")
+        .filter((line) => !line.includes('.option("--verbose"'))
+        .join("\n"),
+    );
+    try {
+      runCli(dir, ["init", original.path]);
+
+      const { status, output } = runCli(dir, ["check", removed.path]);
+      expect(status).toBe(0);
+      expect(output).toContain("🟡");
+      expect(output).toContain("[unstable: exempt from breaking-change enforcement]");
+      expect(output).not.toContain("🔴");
+    } finally {
+      cleanup();
+      original.cleanup();
+      removed.cleanup();
+    }
+  });
+
+  it("an unmarked option's removal still reports as BREAKING, unaffected by the unstable-marker feature", () => {
+    const { dir, cleanup } = makeTempDir();
+    const fixture = writeModifiedFixture((source) =>
+      source
+        .split("\n")
+        .filter((line) => !line.includes(".requiredOption("))
+        .join("\n"),
+    );
+    try {
+      runCli(dir, ["init", FIXTURE]);
+
+      const { status, output } = runCli(dir, ["check", fixture.path]);
+      expect(status).toBe(1);
+      expect(output).toContain("🔴");
+      expect(output).not.toContain("[unstable:");
+    } finally {
+      cleanup();
+      fixture.cleanup();
+    }
+  });
+
   it("--version prints the version from package.json", () => {
     const { dir, cleanup } = makeTempDir();
     try {

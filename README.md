@@ -128,6 +128,16 @@ npx cliguard check ./bin/cli.js --json
 
 `suggestedBump` is the semver bump this diff implies (`"major"`, `"minor"`, `"patch"`, or `null` if nothing changed) - a direct read of the same BREAKING/ADDITIVE/PATCH classification the emoji output already uses, so a release script never has to re-derive it.
 
+### Marking something unstable right where it's declared
+
+`cliguard.config.js` is a separate file - useful for a blanket rule, but one more place to keep in sync as flags get renamed or removed. For a single command/option/argument that isn't stable yet, mark it in its own description instead:
+
+```js
+program.option("--fast", "skip checks [unstable]");
+```
+
+Any BREAKING change to a path whose own description contains `[unstable]` reports as PATCH instead - the marker travels with the code, so it can't silently point at a flag that no longer exists the way an external ignore list can.
+
 ### Project-wide policy: ignoring or downgrading a whole class of change
 
 `accept`/`deprecate` handle one breaking change at a time. For a rule that applies to a whole class of changes - "alias changes are never breaking for us," "ignore everything under the `debug` subcommand" - write `cliguard.config.js` (or `.cjs`) instead:

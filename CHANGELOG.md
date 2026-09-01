@@ -21,6 +21,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   instead of the `.cliguard/contract.json` on disk. Removes the single
   biggest source of CI friction: a PR branch no longer needs its own
   freshly-checked-out baseline file just to run `check`.
+- Unstable markers: a command/option/argument whose own description
+  contains `[unstable]` is exempt from breaking-change enforcement -
+  declared once, right in the target CLI's own source, rather than in a
+  separately maintained ignore list that can drift out of sync as flags
+  get renamed or removed. Inspired by `buf`'s `ignore_unstable_packages`.
+  `DiffEngine` gains `collectUnstablePaths`/`applyUnstableMarkers`
+  (marker defaults to `[unstable]`, overridable).
 - `cliguard.config.js`/`.cjs`: project-wide policy applied before `accept`/
   `deprecate` ever get a look - `ignore: [pattern, ...]` drops a matching
   change from the report entirely (never shown, never fails the build),
