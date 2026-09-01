@@ -1,13 +1,19 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { dirname, join, relative } from "path";
 
-import type { Contract } from "./types";
+import type { AcceptedBreak, Contract } from "./types";
 
 const CONTRACT_PATH = join(process.cwd(), ".cliguard", "contract.json");
+const ACCEPTED_BREAKS_PATH = join(process.cwd(), ".cliguard", "accepted-breaks.json");
 
 /** Contract path relative to cwd, normalized to forward slashes - display only, never used for I/O. */
 export function getContractDisplayPath(): string {
   return relative(process.cwd(), CONTRACT_PATH).split("\\").join("/");
+}
+
+/** Accepted-breaks path relative to cwd, normalized to forward slashes - display only, never used for I/O. */
+export function getAcceptedBreaksDisplayPath(): string {
+  return relative(process.cwd(), ACCEPTED_BREAKS_PATH).split("\\").join("/");
 }
 
 export function contractExists(): boolean {
@@ -42,4 +48,27 @@ export function readContract(): Contract {
 export function writeContract(contract: Contract): void {
   mkdirSync(dirname(CONTRACT_PATH), { recursive: true });
   writeFileSync(CONTRACT_PATH, JSON.stringify(contract, null, 2) + "\n", "utf-8");
+}
+
+/** Unlike readContract, a missing file is normal (most projects never accept a break) - returns [] rather than throwing. */
+export function readAcceptedBreaks(): AcceptedBreak[] {
+  if (!existsSync(ACCEPTED_BREAKS_PATH)) return [];
+  const raw = readFileSync(ACCEPTED_BREAKS_PATH, "utf-8");
+  try {
+    return JSON.parse(raw) as AcceptedBreak[];
+  } catch (error) {
+    // See readContract's identical-purpose catch for why naming the file
+    // and the fix matters here too.
+    const reason = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `cliguard: "${getAcceptedBreaksDisplayPath()}" is not valid JSON (${reason}). ` +
+        "If this file was hand-edited or came out of a bad merge, fix it or delete it " +
+        "and re-run `cliguard accept` for whatever was in it.",
+    );
+  }
+}
+
+export function writeAcceptedBreaks(breaks: readonly AcceptedBreak[]): void {
+  mkdirSync(dirname(ACCEPTED_BREAKS_PATH), { recursive: true });
+  writeFileSync(ACCEPTED_BREAKS_PATH, JSON.stringify(breaks, null, 2) + "\n", "utf-8");
 }

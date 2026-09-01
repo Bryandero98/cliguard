@@ -57,6 +57,22 @@ export interface Contract {
   readonly root: CommandContract;
 }
 
+/**
+ * A specific BREAKING change the maintainer has deliberately accepted -
+ * written by `cliguard accept` and committed to `.cliguard/accepted-breaks.json`
+ * so the decision is auditable in the repo, not a silent CLI flag. `check`
+ * matches these against a diff's `DiffResult.path` and stops counting a
+ * match toward its exit code, while still showing it in the output.
+ */
+export interface AcceptedBreak {
+  /** Must equal the DiffResult.path of the breaking change being accepted, e.g. "root -> build -> option[--target]". */
+  readonly path: string;
+  /** Why this break is intentional - required, never blank, shown alongside the change. */
+  readonly reason: string;
+  /** ISO-8601 timestamp of when `cliguard accept` recorded this. */
+  readonly acceptedAt: string;
+}
+
 /** Severity of a single detected difference between two contracts. */
 export enum ChangeType {
   /** Removes or narrows something a caller may already depend on. */

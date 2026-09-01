@@ -1,5 +1,10 @@
 # cliguard
 
+[![npm version](https://img.shields.io/npm/v/cliguard.svg)](https://www.npmjs.com/package/cliguard)
+[![npm downloads](https://img.shields.io/npm/dm/cliguard.svg)](https://www.npmjs.com/package/cliguard)
+[![CI](https://github.com/Bryandero98/cliguard/actions/workflows/ci.yml/badge.svg)](https://github.com/Bryandero98/cliguard/actions/workflows/ci.yml)
+[![license](https://img.shields.io/npm/l/cliguard.svg)](https://github.com/Bryandero98/cliguard/blob/main/LICENSE)
+
 Snapshot testing for CLI contracts.
 
 ## The problem
@@ -23,7 +28,7 @@ The first line fails your CI. The second one doesn't - `--dry-run` is new and op
 npm install --save-dev cliguard
 ```
 
-Your CLI's entry file should **export** its Commander `Command` instance instead of calling `.parse()` itself - the cleanest way to adopt cliguard, since it never risks running any of your CLI's real logic:
+Point cliguard straight at your existing CLI's entry file - most real CLIs work unmodified, since cliguard automatically captures the framework instance they build at load time even if they never export it (see "Entry files that build the CLI lazily" below). Exporting the instance is still the cleanest way to adopt cliguard where you can, since it never risks running any of your CLI's real logic:
 
 ```js
 // bin/cli.js
@@ -113,10 +118,20 @@ npx cliguard check ./bin/cli.js --json
   "changes": [
     { "type": "BREAKING", "path": "root -> build -> option[--target]", "message": "Option \"--target\" was removed." }
   ],
-  "summary": { "breaking": 1, "additive": 0, "patch": 0 },
+  "summary": { "breaking": 1, "acknowledgedBreaking": 0, "additive": 0, "patch": 0 },
   "suggestedBump": "major"
 }
 ```
+
+### Accepting an intentional breaking change
+
+Sometimes a `BREAKING` change is exactly what you meant to ship - a flag genuinely needed to go away in a major version. Running `cliguard update` after a real, intentional break re-baselines the *entire* contract silently; it doesn't leave a record of what changed or why. `cliguard accept` does:
+
+```sh
+npx cliguard accept ./bin/cli.js "root -> build -> option[--target]" --reason "removed in v2.0, replaced by --targets"
+```
+
+This only works against a change `check` would currently report as `BREAKING` - it reads the exact `path` from your own `check` output (text or `--json`), so there's nothing to guess. It writes `.cliguard/accepted-breaks.json` (commit this file); from then on, `check` still shows that change - now as a 🟣 acknowledged line with the reason attached - but stops counting it toward the `BREAKING` total that fails your build. Any *other*, un-accepted breaking change still fails CI as normal. Once you're done, `cliguard update` still re-baselines the contract to match reality, same as always.
 
 `suggestedBump` is the semver bump this diff implies (`"major"`, `"minor"`, `"patch"`, or `null` if nothing changed) - a direct read of the same BREAKING/ADDITIVE/PATCH classification the emoji output already uses, so a release script never has to re-derive it.
 

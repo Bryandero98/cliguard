@@ -103,7 +103,7 @@ describe("cliguard CLI (subprocess)", () => {
       expect(JSON.parse(output)).toEqual({
         ok: true,
         changes: [],
-        summary: { breaking: 0, additive: 0, patch: 0 },
+        summary: { breaking: 0, acknowledgedBreaking: 0, additive: 0, patch: 0 },
         suggestedBump: null,
       });
     } finally {
@@ -127,10 +127,127 @@ describe("cliguard CLI (subprocess)", () => {
       const result = JSON.parse(output) as { ok: boolean; suggestedBump: string; summary: object };
       expect(result.ok).toBe(false);
       expect(result.suggestedBump).toBe("major");
-      expect(result.summary).toEqual({ breaking: 1, additive: 0, patch: 0 });
+      expect(result.summary).toEqual({
+        breaking: 1,
+        acknowledgedBreaking: 0,
+        additive: 0,
+        patch: 0,
+      });
     } finally {
       cleanup();
       fixture.cleanup();
+    }
+  });
+
+  it("accept records a real BREAKING change, and check then exits 0 and prints a 🟣 acknowledged line instead of 🔴", () => {
+    const { dir, cleanup } = makeTempDir();
+    const fixture = writeModifiedFixture((source) =>
+      source
+        .split("\n")
+        .filter((line) => !line.includes(".requiredOption("))
+        .join("\n"),
+    );
+    const changePath = "root -> build -> option[--target]";
+    try {
+      runCli(dir, ["init", FIXTURE]);
+
+      const acceptResult = runCli(dir, [
+        "accept",
+        fixture.path,
+        changePath,
+        "--reason",
+        "removed in v2, replaced by --targets",
+      ]);
+      expect(acceptResult.status).toBe(0);
+      expect(acceptResult.output).toContain("✅ Accepted");
+      expect(acceptResult.output).toContain(changePath);
+
+      const { status, output } = runCli(dir, ["check", fixture.path]);
+      expect(status).toBe(0);
+      expect(output).toContain("🟣");
+      expect(output).not.toContain("🔴");
+      expect(output).toContain("removed in v2, replaced by --targets");
+    } finally {
+      cleanup();
+      fixture.cleanup();
+    }
+  });
+
+  it("check --json marks an accepted BREAKING change as acknowledged and excludes it from the failing count", () => {
+    const { dir, cleanup } = makeTempDir();
+    const fixture = writeModifiedFixture((source) =>
+      source
+        .split("\n")
+        .filter((line) => !line.includes(".requiredOption("))
+        .join("\n"),
+    );
+    const changePath = "root -> build -> option[--target]";
+    try {
+      runCli(dir, ["init", FIXTURE]);
+      runCli(dir, ["accept", fixture.path, changePath, "--reason", "intentional"]);
+
+      const { status, output } = runCli(dir, ["check", fixture.path, "--json"]);
+      expect(status).toBe(0);
+      const result = JSON.parse(output) as {
+        ok: boolean;
+        summary: object;
+        changes: { path: string; acknowledged?: boolean; reason?: string }[];
+      };
+      expect(result.ok).toBe(true);
+      expect(result.summary).toEqual({
+        breaking: 0,
+        acknowledgedBreaking: 1,
+        additive: 0,
+        patch: 0,
+      });
+      const change = result.changes.find((c) => c.path === changePath);
+      expect(change).toMatchObject({ acknowledged: true, reason: "intentional" });
+    } finally {
+      cleanup();
+      fixture.cleanup();
+    }
+  });
+
+  it("accept refuses a path with no current BREAKING change, listing what actually is breaking", () => {
+    const { dir, cleanup } = makeTempDir();
+    const fixture = writeModifiedFixture((source) =>
+      source
+        .split("\n")
+        .filter((line) => !line.includes(".requiredOption("))
+        .join("\n"),
+    );
+    try {
+      runCli(dir, ["init", FIXTURE]);
+
+      const { status, output } = runCli(dir, [
+        "accept",
+        fixture.path,
+        "root -> nonexistent -> option[--nope]",
+        "--reason",
+        "doesn't matter",
+      ]);
+      expect(status).toBe(1);
+      expect(output).toContain("no current BREAKING change");
+      expect(output).toContain("root -> build -> option[--target]");
+    } finally {
+      cleanup();
+      fixture.cleanup();
+    }
+  });
+
+  it("accept requires --reason", () => {
+    const { dir, cleanup } = makeTempDir();
+    try {
+      runCli(dir, ["init", FIXTURE]);
+      const { status, output } = runCli(dir, [
+        "accept",
+        FIXTURE,
+        "root -> build -> option[--target]",
+      ]);
+      expect(status).not.toBe(0);
+      expect(output).toContain("--reason");
+    } finally {
+      cleanup();
     }
   });
 
@@ -150,7 +267,12 @@ describe("cliguard CLI (subprocess)", () => {
       const result = JSON.parse(output) as { ok: boolean; suggestedBump: string; summary: object };
       expect(result.ok).toBe(true);
       expect(result.suggestedBump).toBe("minor");
-      expect(result.summary).toEqual({ breaking: 0, additive: 1, patch: 0 });
+      expect(result.summary).toEqual({
+        breaking: 0,
+        acknowledgedBreaking: 0,
+        additive: 1,
+        patch: 0,
+      });
     } finally {
       cleanup();
       fixture.cleanup();

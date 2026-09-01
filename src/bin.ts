@@ -8,11 +8,14 @@ import { YargsAdapter } from "./adapters/yargs.adapter";
 import { DiffEngine, type DiffResult } from "./core/diff.engine";
 import {
   contractExists,
+  getAcceptedBreaksDisplayPath,
   getContractDisplayPath,
+  readAcceptedBreaks,
   readContract,
+  writeAcceptedBreaks,
   writeContract,
 } from "./core/storage";
-import { ChangeType } from "./core/types";
+import { ChangeType, type AcceptedBreak } from "./core/types";
 
 // Constructing an adapter here is cheap (no eager require of its
 // framework - CacAdapter only loads `cac` lazily, inside extract()), so
@@ -84,10 +87,13 @@ program
       const oldContract = readContract();
       const newContract = await resolveAdapter(options.adapter).extract(entry);
       const diff = diffEngine.compare(oldContract, newContract);
-      const hasBreaking = diff.some((entry) => entry.type === ChangeType.BREAKING);
+      const acceptedPaths = indexAcceptedBreaks(readAcceptedBreaks());
+      const hasBreaking = diff.some(
+        (change) => change.type === ChangeType.BREAKING && !acceptedPaths.has(change.path),
+      );
 
       if (options.json) {
-        console.log(JSON.stringify(toJsonResult(diff), null, 2));
+        console.log(JSON.stringify(toJsonResult(diff, acceptedPaths), null, 2));
         return hasBreaking ? 1 : 0;
       }
 
@@ -96,11 +102,71 @@ program
         return 0;
       }
 
-      printDiff(diff);
+      printDiff(diff, acceptedPaths);
       return hasBreaking ? 1 : 0;
     });
     process.exit(exitCode);
   });
+
+program
+  .command("accept")
+  .description(
+    "Record that a specific BREAKING change is intentional, so `check` stops failing CI for it",
+  )
+  .argument("<entry>", "path to the target CLI's entry file")
+  .argument(
+    "<changePath>",
+    'the exact DiffResult path to accept, e.g. "root -> build -> option[--target]"',
+  )
+  .requiredOption("-r, --reason <text>", "why this break is intentional - shown in check output")
+  .option(...adapterOption)
+  .action(
+    async (entry: string, changePath: string, options: { reason: string; adapter: string }) => {
+      const exitCode = await withSuppressedExit(async () => {
+        const reason = options.reason.trim();
+        if (!reason) {
+          console.error(
+            "cliguard: --reason can't be blank - it's the audit trail for why this break is OK.",
+          );
+          return 1;
+        }
+
+        const oldContract = readContract();
+        const newContract = await resolveAdapter(options.adapter).extract(entry);
+        const diff = diffEngine.compare(oldContract, newContract);
+        const match = diff.find(
+          (change) => change.type === ChangeType.BREAKING && change.path === changePath,
+        );
+
+        if (!match) {
+          const breaking = diff.filter((change) => change.type === ChangeType.BREAKING);
+          console.error(
+            `cliguard: no current BREAKING change at path "${changePath}".` +
+              (breaking.length === 0
+                ? " There are no BREAKING changes right now - nothing to accept."
+                : ` Currently breaking:\n${breaking.map((change) => `  - ${change.path}`).join("\n")}`),
+          );
+          return 1;
+        }
+
+        // Replaces any earlier acceptance at the same path rather than
+        // accumulating duplicates - re-running `accept` updates the reason.
+        const remaining = readAcceptedBreaks().filter((accepted) => accepted.path !== changePath);
+        const accepted: AcceptedBreak = {
+          path: changePath,
+          reason,
+          acceptedAt: new Date().toISOString(),
+        };
+        writeAcceptedBreaks([...remaining, accepted]);
+
+        console.log(`✅ Accepted: [${changePath}] ${match.message}`);
+        console.log(`   Reason: ${reason}`);
+        console.log(`   Recorded in ${getAcceptedBreaksDisplayPath()} - commit this file.`);
+        return 0;
+      });
+      process.exit(exitCode);
+    },
+  );
 
 program
   .command("update")
@@ -151,20 +217,48 @@ async function withSuppressedExit<T>(action: () => Promise<T>): Promise<T> {
 /** A version bump under semver that this diff implies, or null if nothing changed. */
 type SuggestedBump = "major" | "minor" | "patch" | null;
 
+function indexAcceptedBreaks(
+  accepted: readonly AcceptedBreak[],
+): ReadonlyMap<string, AcceptedBreak> {
+  return new Map(accepted.map((entry) => [entry.path, entry]));
+}
+
+interface JsonChangeResult extends DiffResult {
+  /** Present (and true) only on a BREAKING entry matched by `cliguard accept`. */
+  readonly acknowledged?: true;
+  /** The reason recorded for the acceptance - present exactly when `acknowledged` is. */
+  readonly reason?: string;
+}
+
 interface JsonCheckResult {
   readonly ok: boolean;
-  readonly changes: readonly DiffResult[];
+  readonly changes: readonly JsonChangeResult[];
   readonly summary: {
     readonly breaking: number;
+    readonly acknowledgedBreaking: number;
     readonly additive: number;
     readonly patch: number;
   };
   readonly suggestedBump: SuggestedBump;
 }
 
-function toJsonResult(diff: readonly DiffResult[]): JsonCheckResult {
+function toJsonResult(
+  diff: readonly DiffResult[],
+  acceptedPaths: ReadonlyMap<string, AcceptedBreak>,
+): JsonCheckResult {
+  const changes: JsonChangeResult[] = diff.map((entry) => {
+    if (entry.type !== ChangeType.BREAKING) return entry;
+    const accepted = acceptedPaths.get(entry.path);
+    return accepted ? { ...entry, acknowledged: true, reason: accepted.reason } : entry;
+  });
+
   const summary = {
-    breaking: diff.filter((entry) => entry.type === ChangeType.BREAKING).length,
+    breaking: changes.filter(
+      (change) => change.type === ChangeType.BREAKING && !change.acknowledged,
+    ).length,
+    acknowledgedBreaking: changes.filter(
+      (change) => change.type === ChangeType.BREAKING && change.acknowledged,
+    ).length,
     additive: diff.filter((entry) => entry.type === ChangeType.ADDITIVE).length,
     patch: diff.filter((entry) => entry.type === ChangeType.PATCH).length,
   };
@@ -177,12 +271,20 @@ function toJsonResult(diff: readonly DiffResult[]): JsonCheckResult {
           ? "patch"
           : null;
 
-  return { ok: summary.breaking === 0, changes: diff, summary, suggestedBump };
+  return { ok: summary.breaking === 0, changes, summary, suggestedBump };
 }
 
-function printDiff(diff: readonly DiffResult[]): void {
+function printDiff(
+  diff: readonly DiffResult[],
+  acceptedPaths: ReadonlyMap<string, AcceptedBreak>,
+): void {
   for (const entry of diff) {
-    console.log(`${emojiFor(entry.type)} [${entry.path}] ${entry.message}`);
+    const accepted = entry.type === ChangeType.BREAKING ? acceptedPaths.get(entry.path) : undefined;
+    if (accepted) {
+      console.log(`🟣 [${entry.path}] ${entry.message} (acknowledged: ${accepted.reason})`);
+    } else {
+      console.log(`${emojiFor(entry.type)} [${entry.path}] ${entry.message}`);
+    }
   }
 }
 
