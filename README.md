@@ -225,6 +225,22 @@ npx cliguard check ./bin/cli.js --strict
 
 Off by default so it never changes behavior for an existing CI config - opt in per project.
 
+## Programmatic API
+
+Everything above is the CLI. The same extraction and diff logic is also available as a library, for a custom build script, monorepo tool, or bot that wants to embed a contract check without spawning `npx cliguard` as a subprocess:
+
+```js
+const { extractContract, compareContracts, ChangeType } = require("cliguard");
+
+const oldContract = await extractContract("./bin/cli.js"); // or read one off disk yourself
+const newContract = await extractContract("./bin/cli.js");
+const diff = compareContracts(oldContract, newContract, { strict: true });
+
+const breaking = diff.filter((change) => change.type === ChangeType.BREAKING);
+```
+
+`listAdapters()` returns every name `extractContract`'s second argument accepts. `DiffEngine`, every adapter class (`CommanderAdapter`/`CacAdapter`/`YargsAdapter`), and the `toJUnitXml`/`toGitLabCodeQuality`/`toRdjsonl` formatters are all exported too, for anything more custom than the two convenience functions cover.
+
 ## How changes get classified
 
 | | Removed | Added | Required flipped | Value type / default changed |

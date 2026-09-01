@@ -21,6 +21,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   instead of the `.cliguard/contract.json` on disk. Removes the single
   biggest source of CI friction: a PR branch no longer needs its own
   freshly-checked-out baseline file just to run `check`.
+- Programmatic API: `import { extractContract, compareContracts } from "cliguard"`
+  (also `listAdapters`, `DiffEngine`, every adapter class, `toJUnitXml`/
+  `toGitLabCodeQuality`/`toRdjsonl`, and every `core/types` type). cliguard
+  was CLI-only until now - this lets a build script, monorepo tool, or a
+  custom bot embed the exact same extraction/diff logic the CLI itself
+  runs, without spawning a subprocess. New `main`/`types`/`exports` entries
+  in `package.json` alongside the existing `bin`.
 - `--format rdjsonl` on `check`/`diff`: emits [reviewdog](https://github.com/reviewdog/reviewdog)'s
   own Diagnostic Format (one JSON object per line). Piping it into
   `reviewdog -f=rdjsonl -reporter=<...>` hands off posting the diff to
