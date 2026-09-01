@@ -25,39 +25,67 @@ runs:
       shell: bash
       run: |
         set +e
-        npx cliguard check "${{ inputs.entry }}" --adapter "${{ inputs.adapter }}" --json > cliguard-result.json
+        npx cliguard check "${{ inputs.entry }}" --adapter "${{ inputs.adapter }}" --json > cliguard-result.json 2> cliguard-stderr.txt
         echo "exit-code=$?" >> "$GITHUB_OUTPUT"
         set -e
         cat cliguard-result.json
+        cat cliguard-stderr.txt >&2
 
+    # Deliberately if: always() on both steps below - Comment on PR must
+    # still try to post something (a readable error, at minimum) when the
+    # check step above failed for a reason that isn't a normal BREAKING
+    # result (a crash, a missing contract, a bad entry path - anything
+    # that leaves cliguard-result.json empty or malformed), and the fail
+    # gate below must never be silently skipped just because THIS step
+    # had a problem - a skipped gate is a worse outcome than a noisy one.
     - name: Comment on PR
       if: always() && github.event_name == 'pull_request' && inputs.comment-on-pr == 'true'
       uses: actions/github-script@v7
       with:
         script: |
           const fs = require("fs");
-          const result = JSON.parse(fs.readFileSync("cliguard-result.json", "utf8"));
-
           const MARKER = "<!-- cliguard-report -->";
           const EMOJI = { BREAKING: "🔴", ADDITIVE: "🟢", PATCH: "🟡" };
 
-          let body = `${MARKER}\n## 🛡️ cliguard report\n\n`;
-          if (result.changes.length === 0) {
-            body += "✅ CLI contract is intact - no changes detected.\n";
+          let result = null;
+          try {
+            result = JSON.parse(fs.readFileSync("cliguard-result.json", "utf8"));
+          } catch {
+            result = null;
+          }
+
+          let body;
+          if (result) {
+            body = `${MARKER}\n## 🛡️ cliguard report\n\n`;
+            if (result.changes.length === 0) {
+              body += "✅ CLI contract is intact - no changes detected.\n";
+            } else {
+              body += `**Suggested bump:** \`${result.suggestedBump ?? "none"}\`\n\n`;
+              body += "| | Path | Change |\n|---|---|---|\n";
+              for (const change of result.changes) {
+                const mark = change.acknowledged ? "🟣" : (EMOJI[change.type] || "⚪");
+                const note = change.acknowledged ? ` _(acknowledged: ${change.reason})_` : "";
+                body += `| ${mark} | \`${change.path}\` | ${change.message}${note} |\n`;
+              }
+              if (result.summary.breaking > 0) {
+                body +=
+                  `\n❌ **${result.summary.breaking} unacknowledged breaking change(s).** ` +
+                  "If this is intentional, run `cliguard accept <entry> \"<path>\" --reason \"...\"` " +
+                  "and commit `.cliguard/accepted-breaks.json` - otherwise this needs a fix before merging.\n";
+              }
+            }
           } else {
-            body += `**Suggested bump:** \`${result.suggestedBump ?? "none"}\`\n\n`;
-            body += "| | Path | Change |\n|---|---|---|\n";
-            for (const change of result.changes) {
-              const mark = change.acknowledged ? "🟣" : (EMOJI[change.type] || "⚪");
-              const note = change.acknowledged ? ` _(acknowledged: ${change.reason})_` : "";
-              body += `| ${mark} | \`${change.path}\` | ${change.message}${note} |\n`;
-            }
-            if (result.summary.breaking > 0) {
-              body +=
-                `\n❌ **${result.summary.breaking} unacknowledged breaking change(s).** ` +
-                "If this is intentional, run `cliguard accept <entry> \"<path>\" --reason \"...\"` " +
-                "and commit `.cliguard/accepted-breaks.json` - otherwise this needs a fix before merging.\n";
-            }
+            // check produced no usable JSON - a real failure (bad entry
+            // path, no committed contract, an adapter crash), not a
+            // reportable diff. Surface cliguard's own stderr rather than
+            // silently posting nothing or crashing this script.
+            const stderr = fs.existsSync("cliguard-stderr.txt")
+              ? fs.readFileSync("cliguard-stderr.txt", "utf8").trim()
+              : "";
+            body =
+              `${MARKER}\n## 🛡️ cliguard report\n\n` +
+              "⚠️ cliguard did not produce a result - it likely errored before completing.\n\n" +
+              (stderr ? `\`\`\`\n${stderr}\n\`\`\`\n` : "See the workflow log for details.\n");
           }
 
           const { owner, repo } = context.repo;
@@ -72,8 +100,8 @@ runs:
           }
 
     - name: Fail on unacknowledged breaking changes
-      if: steps.check.outputs.exit-code != '0'
+      if: always() && steps.check.outputs.exit-code != '0'
       shell: bash
       run: |
-        echo "cliguard found unacknowledged breaking change(s) - see the PR comment above, or re-run 'cliguard check --json' for details." >&2
+        echo "cliguard found unacknowledged breaking change(s), or failed to run - see the PR comment above (if posted) or the 'check' step's own log for details." >&2
         exit 1
