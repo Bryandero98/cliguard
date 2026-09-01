@@ -73,6 +73,26 @@ export interface AcceptedBreak {
   readonly acceptedAt: string;
 }
 
+/**
+ * A command/option/argument the maintainer has scheduled for removal ahead
+ * of time - written by `cliguard deprecate` and committed to
+ * `.cliguard/deprecations.json`. Unlike `AcceptedBreak` (which forgives a
+ * break that already happened), this is recorded *before* the removal:
+ * `check`/`diff` reclassify a matching BREAKING removal as PATCH instead
+ * of failing the build, but only because the deprecation was announced in
+ * advance - removing something with no prior `deprecate` still fails.
+ */
+export interface Deprecation {
+  /** Must equal the DiffResult.path of the eventual removal, e.g. "root -> build -> option[--target]". */
+  readonly path: string;
+  /** When this is expected to actually go away - a version ("2.0.0") or a date. Informational, never enforced by cliguard itself. */
+  readonly removeBy: string;
+  /** Why this is being deprecated - optional, shown alongside the change once it's removed. */
+  readonly reason?: string;
+  /** ISO-8601 timestamp of when `cliguard deprecate` recorded this. */
+  readonly deprecatedAt: string;
+}
+
 /** Severity of a single detected difference between two contracts. */
 export enum ChangeType {
   /** Removes or narrows something a caller may already depend on. */

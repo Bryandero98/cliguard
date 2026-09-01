@@ -21,6 +21,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   instead of the `.cliguard/contract.json` on disk. Removes the single
   biggest source of CI friction: a PR branch no longer needs its own
   freshly-checked-out baseline file just to run `check`.
+- `cliguard deprecate <entry> <path> --remove-by <version|date>`: schedules
+  a command/option/argument for removal ahead of time, committed to
+  `.cliguard/deprecations.json`. `check`/`diff` then reclassify that
+  path's eventual removal as PATCH instead of BREAKING - but only because
+  it was announced in advance; removing something with no prior
+  `deprecate` still fails the build exactly as before.
 
 ## [0.6.0] - 2026-08-31
 

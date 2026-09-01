@@ -57,6 +57,7 @@ describe("DiffEngine", () => {
       type: ChangeType.BREAKING,
       path: "root -> option[--target]",
       message: 'Option "--target" was removed.',
+      removal: true,
     });
   });
 
@@ -90,6 +91,7 @@ describe("DiffEngine", () => {
       type: ChangeType.BREAKING,
       path: "root -> option[--verbose]",
       message: 'Option "--verbose" was removed.',
+      removal: true,
     });
   });
 
@@ -241,6 +243,7 @@ describe("DiffEngine", () => {
       type: ChangeType.BREAKING,
       path: "root -> build",
       message: 'Command "build" was removed.',
+      removal: true,
     });
     expect(diff).toContainEqual({
       type: ChangeType.ADDITIVE,
@@ -271,6 +274,7 @@ describe("DiffEngine", () => {
       type: ChangeType.BREAKING,
       path: "root -> <default> -> option[--out]",
       message: 'Option "--out" was removed.',
+      removal: true,
     });
   });
 
@@ -301,5 +305,49 @@ describe("DiffEngine", () => {
     expect(diff).toContainEqual(
       expect.objectContaining({ type: ChangeType.BREAKING, path: "contract" }),
     );
+  });
+
+  describe("collectPaths", () => {
+    it("collects every command, option, and argument path reachable from root", () => {
+      const contract = makeContract(
+        makeCommand({
+          options: [
+            {
+              flags: "--verbose",
+              name: "verbose",
+              aliases: [],
+              description: "",
+              required: false,
+              valueType: "boolean",
+              variadic: false,
+              defaultValue: null,
+            },
+          ],
+          subcommands: [
+            makeCommand({
+              name: "build",
+              arguments: [{ name: "target", required: true, variadic: false, description: "" }],
+            }),
+          ],
+        }),
+      );
+
+      const paths = engine.collectPaths(contract);
+
+      expect(paths).toEqual(
+        new Set([
+          "root",
+          "root -> option[--verbose]",
+          "root -> build",
+          "root -> build -> argument[<target>]",
+        ]),
+      );
+    });
+
+    it("labels a CAC-style unnamed subcommand as <default>, same as the diff output does", () => {
+      const contract = makeContract(makeCommand({ subcommands: [makeCommand({ name: "" })] }));
+
+      expect(engine.collectPaths(contract)).toEqual(new Set(["root", "root -> <default>"]));
+    });
   });
 });

@@ -2,10 +2,11 @@ import { execFileSync } from "child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { dirname, join, relative } from "path";
 
-import type { AcceptedBreak, Contract } from "./types";
+import type { AcceptedBreak, Contract, Deprecation } from "./types";
 
 const CONTRACT_PATH = join(process.cwd(), ".cliguard", "contract.json");
 const ACCEPTED_BREAKS_PATH = join(process.cwd(), ".cliguard", "accepted-breaks.json");
+const DEPRECATIONS_PATH = join(process.cwd(), ".cliguard", "deprecations.json");
 const CI_WORKFLOW_PATH = join(process.cwd(), ".github", "workflows", "cliguard.yml");
 
 /** Contract path relative to cwd, normalized to forward slashes - display only, never used for I/O. */
@@ -133,6 +134,32 @@ export function readAcceptedBreaks(): AcceptedBreak[] {
 export function writeAcceptedBreaks(breaks: readonly AcceptedBreak[]): void {
   mkdirSync(dirname(ACCEPTED_BREAKS_PATH), { recursive: true });
   writeFileSync(ACCEPTED_BREAKS_PATH, JSON.stringify(breaks, null, 2) + "\n", "utf-8");
+}
+
+/** Deprecations path relative to cwd, normalized to forward slashes - display only, never used for I/O. */
+export function getDeprecationsDisplayPath(): string {
+  return relative(process.cwd(), DEPRECATIONS_PATH).split("\\").join("/");
+}
+
+/** Unlike readContract, a missing file is normal (most projects never deprecate anything) - returns [] rather than throwing. */
+export function readDeprecations(): Deprecation[] {
+  if (!existsSync(DEPRECATIONS_PATH)) return [];
+  const raw = readFileSync(DEPRECATIONS_PATH, "utf-8");
+  try {
+    return JSON.parse(raw) as Deprecation[];
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `cliguard: "${getDeprecationsDisplayPath()}" is not valid JSON (${reason}). ` +
+        "If this file was hand-edited or came out of a bad merge, fix it or delete it " +
+        "and re-run `cliguard deprecate` for whatever was in it.",
+    );
+  }
+}
+
+export function writeDeprecations(deprecations: readonly Deprecation[]): void {
+  mkdirSync(dirname(DEPRECATIONS_PATH), { recursive: true });
+  writeFileSync(DEPRECATIONS_PATH, JSON.stringify(deprecations, null, 2) + "\n", "utf-8");
 }
 
 /** CI workflow path relative to cwd, normalized to forward slashes - display only, never used for I/O. */

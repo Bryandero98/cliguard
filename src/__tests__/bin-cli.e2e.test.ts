@@ -274,6 +274,132 @@ describe("cliguard CLI (subprocess)", () => {
     }
   });
 
+  it("deprecate records a currently-existing path, and its later removal counts as PATCH instead of BREAKING", () => {
+    const { dir, cleanup } = makeTempDir();
+    const fixture = writeModifiedFixture((source) =>
+      source
+        .split("\n")
+        .filter((line) => !line.includes(".requiredOption("))
+        .join("\n"),
+    );
+    const changePath = "root -> build -> option[--target]";
+    try {
+      runCli(dir, ["init", FIXTURE]);
+
+      const deprecateResult = runCli(dir, [
+        "deprecate",
+        FIXTURE,
+        changePath,
+        "--remove-by",
+        "2.0.0",
+        "--reason",
+        "replaced by --targets",
+      ]);
+      expect(deprecateResult.status).toBe(0);
+      expect(deprecateResult.output).toContain("✅ Deprecated");
+      expect(deprecateResult.output).toContain(changePath);
+
+      const { status, output } = runCli(dir, ["check", fixture.path]);
+      expect(status).toBe(0);
+      expect(output).toContain("🟡");
+      expect(output).not.toContain("🔴");
+      expect(output).toContain("scheduled removal by 2.0.0");
+      expect(output).toContain("replaced by --targets");
+    } finally {
+      cleanup();
+      fixture.cleanup();
+    }
+  });
+
+  it("removing an option with no prior deprecate still fails as BREAKING", () => {
+    const { dir, cleanup } = makeTempDir();
+    const fixture = writeModifiedFixture((source) =>
+      source
+        .split("\n")
+        .filter((line) => !line.includes(".requiredOption("))
+        .join("\n"),
+    );
+    try {
+      runCli(dir, ["init", FIXTURE]);
+      // No deprecate call here - this is the control case proving
+      // deprecation, not mere removal, is what flips the severity.
+
+      const { status, output } = runCli(dir, ["check", fixture.path]);
+      expect(status).toBe(1);
+      expect(output).toContain("🔴");
+    } finally {
+      cleanup();
+      fixture.cleanup();
+    }
+  });
+
+  it("deprecate refuses a path that doesn't currently exist", () => {
+    const { dir, cleanup } = makeTempDir();
+    try {
+      runCli(dir, ["init", FIXTURE]);
+
+      const { status, output } = runCli(dir, [
+        "deprecate",
+        FIXTURE,
+        "root -> nonexistent -> option[--nope]",
+        "--remove-by",
+        "2.0.0",
+      ]);
+      expect(status).toBe(1);
+      expect(output).toContain("no such path");
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("deprecate requires --remove-by", () => {
+    const { dir, cleanup } = makeTempDir();
+    try {
+      runCli(dir, ["init", FIXTURE]);
+      const { status, output } = runCli(dir, [
+        "deprecate",
+        FIXTURE,
+        "root -> build -> option[--target]",
+      ]);
+      expect(status).not.toBe(0);
+      expect(output).toContain("--remove-by");
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("check --json reflects a deprecated-then-removed option as a PATCH change, not BREAKING", () => {
+    const { dir, cleanup } = makeTempDir();
+    const fixture = writeModifiedFixture((source) =>
+      source
+        .split("\n")
+        .filter((line) => !line.includes(".requiredOption("))
+        .join("\n"),
+    );
+    const changePath = "root -> build -> option[--target]";
+    try {
+      runCli(dir, ["init", FIXTURE]);
+      runCli(dir, ["deprecate", FIXTURE, changePath, "--remove-by", "2026-12-01"]);
+
+      const { status, output } = runCli(dir, ["check", fixture.path, "--json"]);
+      expect(status).toBe(0);
+      const result = JSON.parse(output) as {
+        ok: boolean;
+        summary: { breaking: number; patch: number };
+        changes: { path: string; type: string; message: string }[];
+      };
+      expect(result.ok).toBe(true);
+      expect(result.summary.breaking).toBe(0);
+      expect(result.summary.patch).toBe(1);
+      const change = result.changes.find((c) => c.path === changePath);
+      expect(change?.type).toBe("PATCH");
+      expect(change?.message).toContain("scheduled removal by 2026-12-01");
+    } finally {
+      cleanup();
+      fixture.cleanup();
+    }
+  });
+
   it("check --json reports an ADDITIVE-only change with suggestedBump minor, exit 0", () => {
     const { dir, cleanup } = makeTempDir();
     const fixture = writeModifiedFixture((source) =>

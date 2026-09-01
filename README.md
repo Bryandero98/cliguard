@@ -148,6 +148,20 @@ npx cliguard accept ./bin/cli.js "root -> build -> option[--target]" --reason "r
 
 This only works against a change `check` would currently report as `BREAKING` - it reads the exact `path` from your own `check` output (text or `--json`), so there's nothing to guess. It writes `.cliguard/accepted-breaks.json` (commit this file); from then on, `check` still shows that change - now as a 🟣 acknowledged line with the reason attached - but stops counting it toward the `BREAKING` total that fails your build. Any *other*, un-accepted breaking change still fails CI as normal. Once you're done, `cliguard update` still re-baselines the contract to match reality, same as always.
 
+### Deprecating something ahead of its removal
+
+`accept` forgives a break that already happened. `deprecate` is the other half - announce a removal *before* it happens, so when it eventually does, it's a PATCH instead of a BREAKING change:
+
+```sh
+# The option still exists today - deprecate marks it for a future removal
+npx cliguard deprecate ./bin/cli.js "root -> build -> option[--target]" \
+  --remove-by 2.0.0 --reason "replaced by --targets"
+```
+
+This only works against a path that currently exists (it reads the same `path` shape `check`/`accept` use) - it writes `.cliguard/deprecations.json` (commit this file). From then on, whenever that command/option/argument actually gets removed, `check` reports it as PATCH, with the deprecation's reason and `--remove-by` folded into the message, instead of failing the build. Removing anything that was never deprecated first still fails exactly as before - deprecation has to be announced ahead of the break, not applied retroactively.
+
+`--remove-by` is informational only (a version or a date, whichever fits your release process) - cliguard never checks it against the clock or your `package.json` version, it's just carried through into the message so whoever's reading a changelog or a PR comment knows the plan.
+
 ### Comparing two contracts directly
 
 `cliguard diff <old.json> <new.json>` runs the same comparison as `check`, but reads both sides straight off disk instead of running any CLI - useful for comparing two tags' committed contracts (`git show v1.0.0:.cliguard/contract.json > old.json`), or reviewing a contract change in a PR without a working copy of the target CLI at all:

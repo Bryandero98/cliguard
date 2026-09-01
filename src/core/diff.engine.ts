@@ -12,6 +12,8 @@ export interface DiffResult {
   readonly path: string;
   /** Human-readable description of exactly what changed. */
   readonly message: string;
+  /** True only for "a command/option/argument was removed" - lets `cliguard deprecate` reclassify exactly this kind of BREAKING change, never any other kind at the same path. */
+  readonly removal?: true;
 }
 
 interface Named {
@@ -48,6 +50,33 @@ export class DiffEngine {
     results.push(...this.compareCommands(oldContract.root, newContract.root, "root"));
 
     return results;
+  }
+
+  /**
+   * Every valid DiffResult.path reachable from a Contract's root - the
+   * same path shapes `compareCommands`/`compareOptions`/`compareArguments`
+   * build ("root", "root -> build", "root -> build -> option[--target]",
+   * "root -> build -> argument[<file>]"). Used by `cliguard deprecate` to
+   * validate a path actually exists in the current contract before
+   * recording it, without duplicating the path-building logic here.
+   */
+  collectPaths(contract: Contract): Set<string> {
+    const paths = new Set<string>();
+    this.walkCommand(contract.root, "root", paths);
+    return paths;
+  }
+
+  private walkCommand(cmd: CommandContract, path: string, paths: Set<string>): void {
+    paths.add(path);
+    for (const option of cmd.options) {
+      paths.add(`${path} -> option[--${option.name}]`);
+    }
+    for (const arg of cmd.arguments) {
+      paths.add(`${path} -> argument[<${arg.name}>]`);
+    }
+    for (const sub of cmd.subcommands) {
+      this.walkCommand(sub, `${path} -> ${this.commandLabel(sub.name)}`, paths);
+    }
   }
 
   private compareCommands(
@@ -99,6 +128,7 @@ export class DiffEngine {
           type: ChangeType.BREAKING,
           path: childPath,
           message: `Command "${this.commandLabel(name)}" was removed.`,
+          removal: true,
         });
         continue;
       }
@@ -141,6 +171,7 @@ export class DiffEngine {
           type: ChangeType.BREAKING,
           path: optionPath,
           message: `Option "--${name}" was removed.`,
+          removal: true,
         });
         continue;
       }
@@ -247,6 +278,7 @@ export class DiffEngine {
           type: ChangeType.BREAKING,
           path: argPath,
           message: `Argument "<${name}>" was removed.`,
+          removal: true,
         });
         continue;
       }

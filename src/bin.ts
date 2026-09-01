@@ -13,15 +13,18 @@ import {
   getAcceptedBreaksDisplayPath,
   getCiWorkflowDisplayPath,
   getContractDisplayPath,
+  getDeprecationsDisplayPath,
   readAcceptedBreaks,
   readContract,
   readContractAtRef,
   readContractFile,
+  readDeprecations,
   writeAcceptedBreaks,
   writeCiWorkflow,
   writeContract,
+  writeDeprecations,
 } from "./core/storage";
-import { ChangeType, type AcceptedBreak } from "./core/types";
+import { ChangeType, type AcceptedBreak, type Deprecation } from "./core/types";
 
 // Constructing an adapter here is cheap (no eager require of its
 // framework - CacAdapter only loads `cac` lazily, inside extract()), so
@@ -112,7 +115,10 @@ program
     const exitCode = await withSuppressedExit(async () => {
       const oldContract = options.against ? readContractAtRef(options.against) : readContract();
       const newContract = await resolveAdapter(options.adapter).extract(entry);
-      const diff = diffEngine.compare(oldContract, newContract);
+      const diff = applyDeprecations(
+        diffEngine.compare(oldContract, newContract),
+        indexDeprecations(readDeprecations()),
+      );
       const acceptedPaths = indexAcceptedBreaks(readAcceptedBreaks());
       const hasBreaking = diff.some(
         (change) => change.type === ChangeType.BREAKING && !acceptedPaths.has(change.path),
@@ -159,7 +165,10 @@ program
 
         const oldContract = readContract();
         const newContract = await resolveAdapter(options.adapter).extract(entry);
-        const diff = diffEngine.compare(oldContract, newContract);
+        const diff = applyDeprecations(
+          diffEngine.compare(oldContract, newContract),
+          indexDeprecations(readDeprecations()),
+        );
         const match = diff.find(
           (change) => change.type === ChangeType.BREAKING && change.path === changePath,
         );
@@ -188,6 +197,65 @@ program
         console.log(`✅ Accepted: [${changePath}] ${match.message}`);
         console.log(`   Reason: ${reason}`);
         console.log(`   Recorded in ${getAcceptedBreaksDisplayPath()} - commit this file.`);
+        return 0;
+      });
+      process.exit(exitCode);
+    },
+  );
+
+program
+  .command("deprecate")
+  .description(
+    "Schedule a command/option/argument for removal ahead of time, so that removal counts as PATCH instead of BREAKING",
+  )
+  .argument("<entry>", "path to the target CLI's entry file")
+  .argument(
+    "<path>",
+    'the exact Contract path to deprecate, e.g. "root -> build -> option[--target]" - still present today, not yet removed',
+  )
+  .requiredOption(
+    "--remove-by <versionOrDate>",
+    'when this is expected to actually go away (e.g. "2.0.0" or "2026-12-01") - informational, never enforced by cliguard itself',
+  )
+  .option("-r, --reason <text>", "why this is being deprecated - shown once it's removed")
+  .option(...adapterOption)
+  .action(
+    async (
+      entry: string,
+      path: string,
+      options: { removeBy: string; reason?: string; adapter: string },
+    ) => {
+      const exitCode = await withSuppressedExit(async () => {
+        const contract = await resolveAdapter(options.adapter).extract(entry);
+        const validPaths = diffEngine.collectPaths(contract);
+
+        if (!validPaths.has(path)) {
+          console.error(
+            `cliguard: no such path "${path}" in the current contract - it may already be ` +
+              "removed, or never existed. Run `cliguard preview <entry>` to see the current contract.",
+          );
+          return 1;
+        }
+
+        // Replaces any earlier deprecation at the same path rather than
+        // accumulating duplicates - re-running `deprecate` updates the
+        // remove-by/reason, same as `accept` does for its own reason.
+        const remaining = readDeprecations().filter((existing) => existing.path !== path);
+        const deprecation: Deprecation = {
+          path,
+          removeBy: options.removeBy,
+          reason: options.reason,
+          deprecatedAt: new Date().toISOString(),
+        };
+        writeDeprecations([...remaining, deprecation]);
+
+        console.log(`✅ Deprecated: [${path}]`);
+        console.log(`   Remove by: ${options.removeBy}`);
+        if (options.reason) console.log(`   Reason: ${options.reason}`);
+        console.log(
+          `   Recorded in ${getDeprecationsDisplayPath()} - commit this file. ` +
+            "Its eventual removal will count as PATCH, not BREAKING.",
+        );
         return 0;
       });
       process.exit(exitCode);
@@ -238,7 +306,10 @@ program
     // this program's own top-level parseAsync().catch() below.
     const oldContract = readContractFile(oldPath);
     const newContract = readContractFile(newPath);
-    const diff = diffEngine.compare(oldContract, newContract);
+    const diff = applyDeprecations(
+      diffEngine.compare(oldContract, newContract),
+      indexDeprecations(readDeprecations()),
+    );
     const acceptedPaths = indexAcceptedBreaks(readAcceptedBreaks());
     const hasBreaking = diff.some(
       (change) => change.type === ChangeType.BREAKING && !acceptedPaths.has(change.path),
@@ -328,6 +399,41 @@ function indexAcceptedBreaks(
   accepted: readonly AcceptedBreak[],
 ): ReadonlyMap<string, AcceptedBreak> {
   return new Map(accepted.map((entry) => [entry.path, entry]));
+}
+
+function indexDeprecations(deprecations: readonly Deprecation[]): ReadonlyMap<string, Deprecation> {
+  return new Map(deprecations.map((entry) => [entry.path, entry]));
+}
+
+/**
+ * Reclassifies a BREAKING removal at a deprecated path as PATCH, folding
+ * the deprecation's own record into the message - a scheduled, announced
+ * removal is no longer a surprise to whoever's relying on the flag, so it
+ * shouldn't fail the build the way an unannounced one still does. Only
+ * ever touches entries with `removal: true` (see DiffResult) - a
+ * *different* kind of BREAKING change at the same path (e.g. a default
+ * value change on an option that also happens to be deprecated) is left
+ * alone, since deprecating a removal says nothing about other changes.
+ */
+function applyDeprecations(
+  diff: readonly DiffResult[],
+  deprecations: ReadonlyMap<string, Deprecation>,
+): DiffResult[] {
+  return diff.map((entry) => {
+    if (entry.type !== ChangeType.BREAKING || !entry.removal) return entry;
+    const deprecation = deprecations.get(entry.path);
+    if (!deprecation) return entry;
+
+    return {
+      type: ChangeType.PATCH,
+      path: entry.path,
+      message:
+        `${entry.message} Deprecated ${deprecation.deprecatedAt.slice(0, 10)}, ` +
+        `scheduled removal by ${deprecation.removeBy}` +
+        (deprecation.reason ? ` (${deprecation.reason})` : "") +
+        " - this removal was expected.",
+    };
+  });
 }
 
 interface JsonChangeResult extends DiffResult {
