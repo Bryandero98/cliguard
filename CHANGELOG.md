@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-09-01
+
 ### Added
 
 - `cliguard preview <entry>`: extracts and prints the current CLI's contract
@@ -178,6 +180,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - A corrupt `.cliguard/contract.json` now names the file and suggests the
   fix instead of a generic parse error.
 
+[0.7.0]: https://github.com/Bryandero98/cliguard/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/Bryandero98/cliguard/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/Bryandero98/cliguard/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/Bryandero98/cliguard/compare/v0.3.1...v0.4.0
