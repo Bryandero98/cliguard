@@ -16,6 +16,8 @@ export { CommanderAdapter } from "./adapters/commander.adapter";
 export { YargsAdapter } from "./adapters/yargs.adapter";
 export { adapters, resolveAdapter } from "./adapters/registry";
 
+export { applyConfig, configExists, loadConfig } from "./core/config";
+export type { CliguardConfig, SeverityOverride } from "./core/config";
 export { DiffEngine } from "./core/diff.engine";
 export type { CompareOptions, DiffResult } from "./core/diff.engine";
 export { toGitLabCodeQuality, toJUnitXml, toRdjsonl } from "./core/report-formats";

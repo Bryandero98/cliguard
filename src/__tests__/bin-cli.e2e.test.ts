@@ -1044,6 +1044,82 @@ describe("cliguard CLI (subprocess)", () => {
     }
   });
 
+  it("a real cliguard.config.js ignores a matching BREAKING change entirely", () => {
+    const { dir, cleanup } = makeTempDir();
+    const fixture = writeModifiedFixture((source) =>
+      source
+        .split("\n")
+        .filter((line) => !line.includes(".requiredOption("))
+        .join("\n"),
+    );
+    try {
+      runCli(dir, ["init", FIXTURE]);
+      writeFileSync(
+        path.join(dir, "cliguard.config.js"),
+        'module.exports = { ignore: ["root -> build -> option[--target]"] };\n',
+      );
+
+      const { status, output } = runCli(dir, ["check", fixture.path]);
+      expect(status).toBe(0);
+      expect(output).toContain("CLI contract is intact.");
+    } finally {
+      cleanup();
+      fixture.cleanup();
+    }
+  });
+
+  it("a real cliguard.config.js downgrades a matching BREAKING change to PATCH via severityOverrides", () => {
+    const { dir, cleanup } = makeTempDir();
+    const fixture = writeModifiedFixture((source) =>
+      source
+        .split("\n")
+        .filter((line) => !line.includes(".requiredOption("))
+        .join("\n"),
+    );
+    try {
+      runCli(dir, ["init", FIXTURE]);
+      writeFileSync(
+        path.join(dir, "cliguard.config.js"),
+        'module.exports = { severityOverrides: [{ pattern: "root -> build -> option[--target]", severity: "PATCH" }] };\n',
+      );
+
+      const { status, output } = runCli(dir, ["check", fixture.path]);
+      expect(status).toBe(0);
+      expect(output).toContain("🟡");
+      expect(output).toContain("severity overridden to PATCH");
+    } finally {
+      cleanup();
+      fixture.cleanup();
+    }
+  });
+
+  it("a malformed cliguard.config.js fails with a clear error instead of crashing cryptically", () => {
+    const { dir, cleanup } = makeTempDir();
+    try {
+      runCli(dir, ["init", FIXTURE]);
+      writeFileSync(path.join(dir, "cliguard.config.js"), "not valid javascript {{{\n");
+
+      const { status, output } = runCli(dir, ["check", FIXTURE]);
+      expect(status).toBe(1);
+      expect(output).toContain("failed to load");
+      expect(output).toContain("cliguard.config.js");
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("with no cliguard.config.js present, check behaves exactly as before (unaffected)", () => {
+    const { dir, cleanup } = makeTempDir();
+    try {
+      runCli(dir, ["init", FIXTURE]);
+      const { status, output } = runCli(dir, ["check", FIXTURE]);
+      expect(status).toBe(0);
+      expect(output).toContain("CLI contract is intact.");
+    } finally {
+      cleanup();
+    }
+  });
+
   it("--version prints the version from package.json", () => {
     const { dir, cleanup } = makeTempDir();
     try {

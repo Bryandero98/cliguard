@@ -21,6 +21,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   instead of the `.cliguard/contract.json` on disk. Removes the single
   biggest source of CI friction: a PR branch no longer needs its own
   freshly-checked-out baseline file just to run `check`.
+- `cliguard.config.js`/`.cjs`: project-wide policy applied before `accept`/
+  `deprecate` ever get a look - `ignore: [pattern, ...]` drops a matching
+  change from the report entirely (never shown, never fails the build),
+  and `severityOverrides: [{ pattern, severity }]` reclassifies one
+  (e.g. "alias changes are never breaking for us") without hand-writing a
+  per-instance `accept` for each one. `pattern` is a `RegExp` or a glob
+  string (`*` matches any run of characters) matched against a change's
+  `DiffResult.path`. No config file present behaves exactly as before.
 - Programmatic API: `import { extractContract, compareContracts } from "cliguard"`
   (also `listAdapters`, `DiffEngine`, every adapter class, `toJUnitXml`/
   `toGitLabCodeQuality`/`toRdjsonl`, and every `core/types` type). cliguard

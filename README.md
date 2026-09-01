@@ -128,6 +128,23 @@ npx cliguard check ./bin/cli.js --json
 
 `suggestedBump` is the semver bump this diff implies (`"major"`, `"minor"`, `"patch"`, or `null` if nothing changed) - a direct read of the same BREAKING/ADDITIVE/PATCH classification the emoji output already uses, so a release script never has to re-derive it.
 
+### Project-wide policy: ignoring or downgrading a whole class of change
+
+`accept`/`deprecate` handle one breaking change at a time. For a rule that applies to a whole class of changes - "alias changes are never breaking for us," "ignore everything under the `debug` subcommand" - write `cliguard.config.js` (or `.cjs`) instead:
+
+```js
+// cliguard.config.js
+module.exports = {
+  // Dropped from the report entirely - never shown, never fails the build.
+  ignore: ["root -> debug -> *"],
+
+  // Reclassified, not dropped - still visible, just not BREAKING anymore.
+  severityOverrides: [{ pattern: /alias/, severity: "PATCH" }],
+};
+```
+
+`pattern` in either field is a `RegExp` or a glob string (`*` matches any run of characters) matched against a change's path (the same string `check`'s own output shows, e.g. `"root -> build -> option[--target]"`). Applied before `accept`/`deprecate` ever run, so a change this config already downgraded has nothing left for either of those to act on. No `cliguard.config.js` present is a no-op - every project behaves exactly as it always has.
+
 ### Comparing against a git ref instead of a local file
 
 `check` normally diffs against `.cliguard/contract.json` on disk, but a CI runner checking out a PR branch often doesn't have a freshly-updated one - `--against <ref>` reads the contract straight out of git instead, no local file required:

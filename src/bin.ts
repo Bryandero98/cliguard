@@ -3,6 +3,7 @@ import { Command } from "commander";
 import { relative, resolve } from "path";
 
 import { adapters, resolveAdapter } from "./adapters/registry";
+import { applyConfig, loadConfig } from "./core/config";
 import { DiffEngine, type DiffResult } from "./core/diff.engine";
 import { toGitLabCodeQuality, toJUnitXml, toRdjsonl } from "./core/report-formats";
 import {
@@ -160,7 +161,10 @@ program
         const oldContract = options.against ? readContractAtRef(options.against) : readContract();
         const newContract = await resolveAdapter(options.adapter).extract(entry);
         const diff = applyDeprecations(
-          diffEngine.compare(oldContract, newContract, { strict: options.strict }),
+          applyConfig(
+            diffEngine.compare(oldContract, newContract, { strict: options.strict }),
+            loadConfig(),
+          ),
           indexDeprecations(readDeprecations()),
         );
         const acceptedPaths = indexAcceptedBreaks(readAcceptedBreaks());
@@ -211,7 +215,7 @@ program
         const oldContract = readContract();
         const newContract = await resolveAdapter(options.adapter).extract(entry);
         const diff = applyDeprecations(
-          diffEngine.compare(oldContract, newContract),
+          applyConfig(diffEngine.compare(oldContract, newContract), loadConfig()),
           indexDeprecations(readDeprecations()),
         );
         const match = diff.find(
@@ -448,7 +452,10 @@ program
       const oldContract = readContractFile(oldPath);
       const newContract = readContractFile(newPath);
       const diff = applyDeprecations(
-        diffEngine.compare(oldContract, newContract, { strict: options.strict }),
+        applyConfig(
+          diffEngine.compare(oldContract, newContract, { strict: options.strict }),
+          loadConfig(),
+        ),
         indexDeprecations(readDeprecations()),
       );
       const acceptedPaths = indexAcceptedBreaks(readAcceptedBreaks());
