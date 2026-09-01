@@ -7,7 +7,6 @@ const { Command } = require("commander");
 const program = new Command();
 program
   .command("deploy")
-  .requiredOption("-e, --env <env>", "target environment")
   .option("--dry-run", "don't actually deploy");
 
 module.exports = { program };
