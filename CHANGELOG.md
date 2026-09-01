@@ -21,6 +21,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   instead of the `.cliguard/contract.json` on disk. Removes the single
   biggest source of CI friction: a PR branch no longer needs its own
   freshly-checked-out baseline file just to run `check`.
+- `--strict` on `check`/`diff`: enables extra rules for changes that are
+  currently silent but can still break an existing caller - today, a pure
+  reorder of a command's positional arguments (same names, different
+  sequence), which the default name-indexed comparison can't see since it
+  never looks at position. Off by default - existing CI configs keep
+  today's behavior exactly.
 - `cliguard install-hook <entry>`: installs a git `pre-push` (or
   `--hook pre-commit`) hook that runs `cliguard check` automatically -
   catches a breaking change before it ever reaches CI, not just at it.

@@ -192,6 +192,25 @@ npx cliguard install-hook ./bin/cli.js --hook pre-commit
 
 Never overwrites a hook that's already there - if you're already using [husky](https://typicode.github.io/husky/) or a similar tool, add the same `npx cliguard check ...` line to your existing hook instead.
 
+### `--strict`: catching changes the default rules can't see
+
+The default rules match commands/options/arguments by name, so a change that keeps every name the same is invisible to them - even when it can still break a caller. `--strict` adds rules for exactly that gap. Today, one: a pure reorder of a command's positional arguments.
+
+```js
+// before
+program.command("copy").argument("<src>").argument("<dest>");
+// after - same two arguments, swapped order
+program.command("copy").argument("<dest>").argument("<src>");
+```
+
+The default rules see no change at all here (`<src>` still exists, `<dest>` still exists). But `cli copy a.txt b.txt` now copies `b.txt` over `a.txt`, not the reverse - a real, silent break for anyone calling it positionally:
+
+```sh
+npx cliguard check ./bin/cli.js --strict
+```
+
+Off by default so it never changes behavior for an existing CI config - opt in per project.
+
 ## How changes get classified
 
 | | Removed | Added | Required flipped | Value type / default changed |

@@ -114,34 +114,44 @@ program
     "--against <ref>",
     "compare against a git ref's committed contract (e.g. origin/main, a tag, a commit sha) instead of the .cliguard/contract.json on disk",
   )
-  .action(async (entry: string, options: { adapter: string; json: boolean; against?: string }) => {
-    const exitCode = await withSuppressedExit(async () => {
-      const oldContract = options.against ? readContractAtRef(options.against) : readContract();
-      const newContract = await resolveAdapter(options.adapter).extract(entry);
-      const diff = applyDeprecations(
-        diffEngine.compare(oldContract, newContract),
-        indexDeprecations(readDeprecations()),
-      );
-      const acceptedPaths = indexAcceptedBreaks(readAcceptedBreaks());
-      const hasBreaking = diff.some(
-        (change) => change.type === ChangeType.BREAKING && !acceptedPaths.has(change.path),
-      );
+  .option(
+    "--strict",
+    "enable extra rules for currently-silent risky changes (e.g. a positional argument reorder)",
+    false,
+  )
+  .action(
+    async (
+      entry: string,
+      options: { adapter: string; json: boolean; against?: string; strict: boolean },
+    ) => {
+      const exitCode = await withSuppressedExit(async () => {
+        const oldContract = options.against ? readContractAtRef(options.against) : readContract();
+        const newContract = await resolveAdapter(options.adapter).extract(entry);
+        const diff = applyDeprecations(
+          diffEngine.compare(oldContract, newContract, { strict: options.strict }),
+          indexDeprecations(readDeprecations()),
+        );
+        const acceptedPaths = indexAcceptedBreaks(readAcceptedBreaks());
+        const hasBreaking = diff.some(
+          (change) => change.type === ChangeType.BREAKING && !acceptedPaths.has(change.path),
+        );
 
-      if (options.json) {
-        console.log(JSON.stringify(toJsonResult(diff, acceptedPaths), null, 2));
+        if (options.json) {
+          console.log(JSON.stringify(toJsonResult(diff, acceptedPaths), null, 2));
+          return hasBreaking ? 1 : 0;
+        }
+
+        if (diff.length === 0) {
+          console.log("✅ CLI contract is intact.");
+          return 0;
+        }
+
+        printDiff(diff, acceptedPaths);
         return hasBreaking ? 1 : 0;
-      }
-
-      if (diff.length === 0) {
-        console.log("✅ CLI contract is intact.");
-        return 0;
-      }
-
-      printDiff(diff, acceptedPaths);
-      return hasBreaking ? 1 : 0;
-    });
-    process.exit(exitCode);
-  });
+      });
+      process.exit(exitCode);
+    },
+  );
 
 program
   .command("accept")
@@ -332,7 +342,12 @@ program
   .argument("<oldContract>", "path to the older contract JSON file")
   .argument("<newContract>", "path to the newer contract JSON file")
   .option("--json", "print a machine-readable JSON result instead of text", false)
-  .action((oldPath: string, newPath: string, options: { json: boolean }) => {
+  .option(
+    "--strict",
+    "enable extra rules for currently-silent risky changes (e.g. a positional argument reorder)",
+    false,
+  )
+  .action((oldPath: string, newPath: string, options: { json: boolean; strict: boolean }) => {
     // No adapter, no target CLI ever loaded here - just two files off
     // disk - so none of withSuppressedExit's process.exit-race concerns
     // apply. A thrown Error (bad path, corrupt JSON) still surfaces via
@@ -340,7 +355,7 @@ program
     const oldContract = readContractFile(oldPath);
     const newContract = readContractFile(newPath);
     const diff = applyDeprecations(
-      diffEngine.compare(oldContract, newContract),
+      diffEngine.compare(oldContract, newContract, { strict: options.strict }),
       indexDeprecations(readDeprecations()),
     );
     const acceptedPaths = indexAcceptedBreaks(readAcceptedBreaks());

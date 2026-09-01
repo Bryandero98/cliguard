@@ -350,4 +350,48 @@ describe("DiffEngine", () => {
       expect(engine.collectPaths(contract)).toEqual(new Set(["root", "root -> <default>"]));
     });
   });
+
+  describe("strict mode", () => {
+    function makeArgs(names: string[]) {
+      return names.map((name) => ({ name, required: true, variadic: false, description: "" }));
+    }
+
+    it("says nothing about a pure positional argument reorder by default (strict off)", () => {
+      const oldContract = makeContract(makeCommand({ arguments: makeArgs(["src", "dest"]) }));
+      const newContract = makeContract(makeCommand({ arguments: makeArgs(["dest", "src"]) }));
+
+      expect(engine.compare(oldContract, newContract)).toEqual([]);
+    });
+
+    it("flags a pure positional argument reorder as BREAKING under --strict", () => {
+      const oldContract = makeContract(makeCommand({ arguments: makeArgs(["src", "dest"]) }));
+      const newContract = makeContract(makeCommand({ arguments: makeArgs(["dest", "src"]) }));
+
+      const diff = engine.compare(oldContract, newContract, { strict: true });
+
+      expect(diff).toContainEqual(
+        expect.objectContaining({
+          type: ChangeType.BREAKING,
+          path: "root",
+          message: expect.stringContaining("Argument order changed"),
+        }),
+      );
+    });
+
+    it("flags nothing under --strict when the argument order is unchanged", () => {
+      const contract = makeContract(makeCommand({ arguments: makeArgs(["src", "dest"]) }));
+
+      expect(engine.compare(contract, contract, { strict: true })).toEqual([]);
+    });
+
+    it("reports a real add/remove normally under --strict, without a redundant reorder entry on top", () => {
+      const oldContract = makeContract(makeCommand({ arguments: makeArgs(["src"]) }));
+      const newContract = makeContract(makeCommand({ arguments: makeArgs(["dest", "src"]) }));
+
+      const diff = engine.compare(oldContract, newContract, { strict: true });
+
+      expect(diff.some((d) => d.message.includes("was added"))).toBe(true);
+      expect(diff.some((d) => d.message.includes("Argument order changed"))).toBe(false);
+    });
+  });
 });

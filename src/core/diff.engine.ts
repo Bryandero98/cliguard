@@ -20,6 +20,19 @@ interface Named {
   readonly name: string;
 }
 
+export interface CompareOptions {
+  /**
+   * Enables extra rules for changes that are currently silent (no diff
+   * entry at all) but can still break an existing caller - today, only a
+   * pure reorder of a command's positional arguments (same names, same
+   * required/variadic shape, different sequence), which the default,
+   * name-indexed comparison can't see since it never looks at position.
+   * Off by default so existing callers/CI configs keep today's behavior
+   * exactly - this is opt-in stricter enforcement, not a bug fix.
+   */
+  readonly strict?: boolean;
+}
+
 /**
  * Compares two Contracts and returns every difference between them,
  * classified as BREAKING, ADDITIVE, or PATCH. Purely structural: it only
@@ -28,7 +41,11 @@ interface Named {
  * either contract. `capturedAt` is intentionally never read.
  */
 export class DiffEngine {
-  compare(oldContract: Contract, newContract: Contract): DiffResult[] {
+  compare(
+    oldContract: Contract,
+    newContract: Contract,
+    options: CompareOptions = {},
+  ): DiffResult[] {
     const results: DiffResult[] = [];
 
     if (oldContract.adapter !== newContract.adapter) {
@@ -47,7 +64,7 @@ export class DiffEngine {
       });
     }
 
-    results.push(...this.compareCommands(oldContract.root, newContract.root, "root"));
+    results.push(...this.compareCommands(oldContract.root, newContract.root, "root", options));
 
     return results;
   }
@@ -83,6 +100,7 @@ export class DiffEngine {
     oldCmd: CommandContract,
     newCmd: CommandContract,
     path: string,
+    options: CompareOptions,
   ): DiffResult[] {
     const results: DiffResult[] = [];
 
@@ -104,8 +122,8 @@ export class DiffEngine {
     );
 
     results.push(...this.compareOptions(oldCmd.options, newCmd.options, path));
-    results.push(...this.compareArguments(oldCmd.arguments, newCmd.arguments, path));
-    results.push(...this.compareSubcommands(oldCmd.subcommands, newCmd.subcommands, path));
+    results.push(...this.compareArguments(oldCmd.arguments, newCmd.arguments, path, options));
+    results.push(...this.compareSubcommands(oldCmd.subcommands, newCmd.subcommands, path, options));
 
     return results;
   }
@@ -114,6 +132,7 @@ export class DiffEngine {
     oldSubs: readonly CommandContract[],
     newSubs: readonly CommandContract[],
     path: string,
+    options: CompareOptions,
   ): DiffResult[] {
     const results: DiffResult[] = [];
     const oldByName = this.indexByName(oldSubs);
@@ -133,7 +152,7 @@ export class DiffEngine {
         continue;
       }
 
-      results.push(...this.compareCommands(oldSub, newSub, childPath));
+      results.push(...this.compareCommands(oldSub, newSub, childPath, options));
     }
 
     for (const name of newByName.keys()) {
@@ -264,6 +283,7 @@ export class DiffEngine {
     oldArgs: readonly ArgumentContract[],
     newArgs: readonly ArgumentContract[],
     path: string,
+    options: CompareOptions,
   ): DiffResult[] {
     const results: DiffResult[] = [];
     const oldByName = this.indexByName(oldArgs);
@@ -305,7 +325,47 @@ export class DiffEngine {
       }
     }
 
+    if (options.strict) {
+      results.push(...this.compareArgumentOrder(oldArgs, newArgs, path));
+    }
+
     return results;
+  }
+
+  /**
+   * `--strict`-only: positional arguments are matched by name everywhere
+   * above, so a pure reorder (same names, same shape, different sequence)
+   * produces no diff at all under the default rules - but position is
+   * exactly what a caller passing values positionally relies on, so it's
+   * a real, silent break. Only fires when the two argument lists are the
+   * same *set* of names (any actual add/remove is already reported by the
+   * per-name loop above; this would just be redundant noise on top of it).
+   */
+  private compareArgumentOrder(
+    oldArgs: readonly ArgumentContract[],
+    newArgs: readonly ArgumentContract[],
+    path: string,
+  ): DiffResult[] {
+    if (oldArgs.length !== newArgs.length) return [];
+
+    const oldNames = oldArgs.map((arg) => arg.name);
+    const newNames = newArgs.map((arg) => arg.name);
+    if (oldNames.join(" ") === newNames.join(" ")) return [];
+
+    const sameSet =
+      new Set(oldNames).size === new Set(newNames).size &&
+      oldNames.every((name) => newNames.includes(name));
+    if (!sameSet) return [];
+
+    return [
+      {
+        type: ChangeType.BREAKING,
+        path,
+        message:
+          `[strict] Argument order changed: was <${oldNames.join(">, <")}>, ` +
+          `now <${newNames.join(">, <")}>. Existing positional invocations may now bind values to the wrong argument.`,
+      },
+    ];
   }
 
   private compareArgument(

@@ -822,6 +822,42 @@ describe("cliguard CLI (subprocess)", () => {
     }
   });
 
+  it("check --strict flags a positional argument reorder as BREAKING; without --strict it's silent", () => {
+    const { dir, cleanup } = makeTempDir();
+    const withCopyCommand = (source: string) =>
+      source.replace(
+        "module.exports = { program };",
+        [
+          'program.command("copy").argument("<src>", "source").argument("<dest>", "destination").action(() => {});',
+          "",
+          "module.exports = { program };",
+        ].join("\n"),
+      );
+    const original = writeModifiedFixture(withCopyCommand);
+    const reordered = writeModifiedFixture((source) =>
+      withCopyCommand(source).replace(
+        '.argument("<src>", "source").argument("<dest>", "destination")',
+        '.argument("<dest>", "destination").argument("<src>", "source")',
+      ),
+    );
+    try {
+      runCli(dir, ["init", original.path]);
+
+      const defaultResult = runCli(dir, ["check", reordered.path]);
+      expect(defaultResult.status).toBe(0);
+      expect(defaultResult.output).toContain("CLI contract is intact.");
+
+      const strictResult = runCli(dir, ["check", reordered.path, "--strict"]);
+      expect(strictResult.status).toBe(1);
+      expect(strictResult.output).toContain("[strict]");
+      expect(strictResult.output).toContain("Argument order changed");
+    } finally {
+      cleanup();
+      original.cleanup();
+      reordered.cleanup();
+    }
+  });
+
   it("--version prints the version from package.json", () => {
     const { dir, cleanup } = makeTempDir();
     try {
