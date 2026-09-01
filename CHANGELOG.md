@@ -11,6 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- The GitHub Action now posts (and keeps updated in place, one comment per
+  PR) a Markdown summary of the diff as a PR comment - the recommended CI
+  path, surfacing exactly what changed where a reviewer already looks,
+  instead of only a CI exit code buried in a log. New `comment-on-pr`
+  input (default `true`) to opt out; needs `permissions: pull-requests:
+  write` on the calling workflow.
 - `cliguard diff <old.json> <new.json>`: compares two contract files
   directly - no adapter, no target CLI ever loaded - for diffing two tags'
   committed contracts or reviewing a contract change without a working

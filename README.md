@@ -158,10 +158,14 @@ Full rules live in [`src/core/diff.engine.ts`](src/core/diff.engine.ts) - it's t
 
 ## CI integration
 
+The bundled GitHub Action (`Bryandero98/cliguard@v1`) is the recommended way to run this in CI: on top of the same exit-code gate as `npx cliguard check`, it posts the diff as a PR comment - updated in place on every push, not a new one each time - so a reviewer sees exactly what changed without opening the CI log:
+
 ```yaml
 # .github/workflows/cliguard.yml
 name: CLI contract
 on: [pull_request]
+permissions:
+  pull-requests: write # needed for the PR comment
 jobs:
   check:
     runs-on: ubuntu-latest
@@ -170,7 +174,17 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 22.x }
       - run: npm ci
-      - run: npx cliguard check ./bin/cli.js
+      - uses: Bryandero98/cliguard@v1
+        with:
+          entry: ./bin/cli.js
+          # adapter: yargs        # default: commander
+          # comment-on-pr: false  # default: true
+```
+
+Set `comment-on-pr: false` to keep the exit-code gate without the comment, or use the raw CLI directly for a non-GitHub CI provider:
+
+```yaml
+- run: npx cliguard check ./bin/cli.js
 ```
 
 ## Supported frameworks

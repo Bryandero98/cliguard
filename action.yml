@@ -9,9 +9,71 @@ inputs:
   entry:
     description: "Path to the target CLI's entry file"
     required: true
+  adapter:
+    description: "CLI framework adapter to use (commander, cac, yargs)"
+    required: false
+    default: "commander"
+  comment-on-pr:
+    description: "Post (and keep updated in place) a PR comment summarizing the result. No-op outside a pull_request event. Needs `permissions: pull-requests: write` on the calling workflow/job."
+    required: false
+    default: "true"
 
 runs:
   using: "composite"
   steps:
-    - run: npx cliguard check "${{ inputs.entry }}"
+    - id: check
       shell: bash
+      run: |
+        set +e
+        npx cliguard check "${{ inputs.entry }}" --adapter "${{ inputs.adapter }}" --json > cliguard-result.json
+        echo "exit-code=$?" >> "$GITHUB_OUTPUT"
+        set -e
+        cat cliguard-result.json
+
+    - name: Comment on PR
+      if: always() && github.event_name == 'pull_request' && inputs.comment-on-pr == 'true'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require("fs");
+          const result = JSON.parse(fs.readFileSync("cliguard-result.json", "utf8"));
+
+          const MARKER = "<!-- cliguard-report -->";
+          const EMOJI = { BREAKING: "🔴", ADDITIVE: "🟢", PATCH: "🟡" };
+
+          let body = `${MARKER}\n## 🛡️ cliguard report\n\n`;
+          if (result.changes.length === 0) {
+            body += "✅ CLI contract is intact - no changes detected.\n";
+          } else {
+            body += `**Suggested bump:** \`${result.suggestedBump ?? "none"}\`\n\n`;
+            body += "| | Path | Change |\n|---|---|---|\n";
+            for (const change of result.changes) {
+              const mark = change.acknowledged ? "🟣" : (EMOJI[change.type] || "⚪");
+              const note = change.acknowledged ? ` _(acknowledged: ${change.reason})_` : "";
+              body += `| ${mark} | \`${change.path}\` | ${change.message}${note} |\n`;
+            }
+            if (result.summary.breaking > 0) {
+              body +=
+                `\n❌ **${result.summary.breaking} unacknowledged breaking change(s).** ` +
+                "If this is intentional, run `cliguard accept <entry> \"<path>\" --reason \"...\"` " +
+                "and commit `.cliguard/accepted-breaks.json` - otherwise this needs a fix before merging.\n";
+            }
+          }
+
+          const { owner, repo } = context.repo;
+          const issue_number = context.issue.number;
+          const { data: comments } = await github.rest.issues.listComments({ owner, repo, issue_number });
+          const existing = comments.find((c) => c.body && c.body.startsWith(MARKER));
+
+          if (existing) {
+            await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
+          } else {
+            await github.rest.issues.createComment({ owner, repo, issue_number, body });
+          }
+
+    - name: Fail on unacknowledged breaking changes
+      if: steps.check.outputs.exit-code != '0'
+      shell: bash
+      run: |
+        echo "cliguard found unacknowledged breaking change(s) - see the PR comment above, or re-run 'cliguard check --json' for details." >&2
+        exit 1
