@@ -97,4 +97,27 @@ describe("storage", () => {
       /is not valid JSON.*cliguard update/,
     );
   });
+
+  it("readContractFile reads a Contract from an arbitrary path, unrelated to the committed one", () => {
+    const arbitraryPath = path.join(dir, "some-other-name.json");
+    writeFileSync(arbitraryPath, JSON.stringify(SAMPLE_CONTRACT));
+
+    const result = withFreshStorage(dir, (storage) => storage.readContractFile(arbitraryPath));
+    expect(result).toEqual(SAMPLE_CONTRACT);
+  });
+
+  it("readContractFile throws a clear error naming the file when it doesn't exist", () => {
+    const missing = path.join(dir, "missing.json");
+    expect(() => withFreshStorage(dir, (storage) => storage.readContractFile(missing))).toThrow(
+      /no such file/,
+    );
+  });
+
+  it("readContractFile throws a clear error naming the file when it's corrupt JSON", () => {
+    const corrupt = path.join(dir, "corrupt.json");
+    writeFileSync(corrupt, "{ not valid json");
+    expect(() => withFreshStorage(dir, (storage) => storage.readContractFile(corrupt))).toThrow(
+      /is not valid JSON/,
+    );
+  });
 });

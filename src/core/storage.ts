@@ -50,6 +50,27 @@ export function writeContract(contract: Contract): void {
   writeFileSync(CONTRACT_PATH, JSON.stringify(contract, null, 2) + "\n", "utf-8");
 }
 
+/**
+ * Reads a Contract from an arbitrary path, not the committed
+ * `.cliguard/contract.json` - for `cliguard diff <a> <b>`, comparing two
+ * contract files directly (e.g. two tags' committed contracts pulled via
+ * `git show`) without running any real CLI. `displayPath` is what error
+ * messages name; defaults to `path` itself since a caller-supplied path is
+ * already about as displayable as it gets.
+ */
+export function readContractFile(path: string, displayPath: string = path): Contract {
+  if (!existsSync(path)) {
+    throw new Error(`cliguard: no such file: "${displayPath}".`);
+  }
+  const raw = readFileSync(path, "utf-8");
+  try {
+    return JSON.parse(raw) as Contract;
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    throw new Error(`cliguard: "${displayPath}" is not valid JSON (${reason}).`);
+  }
+}
+
 /** Unlike readContract, a missing file is normal (most projects never accept a break) - returns [] rather than throwing. */
 export function readAcceptedBreaks(): AcceptedBreak[] {
   if (!existsSync(ACCEPTED_BREAKS_PATH)) return [];

@@ -327,6 +327,110 @@ describe("cliguard CLI (subprocess)", () => {
     }
   });
 
+  it("diff compares two contract files directly, no adapter or target CLI involved", () => {
+    // Two separate temp dirs each get their own real, independently
+    // captured contract - `diff` then reads both off disk by path, the
+    // same shape as comparing two tags' committed contracts in a repo.
+    const oldDir = makeTempDir();
+    const newDir = makeTempDir();
+    const fixture = writeModifiedFixture((source) =>
+      source
+        .split("\n")
+        .filter((line) => !line.includes(".requiredOption("))
+        .join("\n"),
+    );
+    try {
+      runCli(oldDir.dir, ["init", FIXTURE]);
+      runCli(newDir.dir, ["init", fixture.path]);
+
+      const oldContractPath = path.join(oldDir.dir, ".cliguard", "contract.json");
+      const newContractPath = path.join(newDir.dir, ".cliguard", "contract.json");
+
+      const { status, output } = runCli(oldDir.dir, ["diff", oldContractPath, newContractPath]);
+      expect(status).toBe(1);
+      expect(output).toContain("🔴");
+      expect(output).toContain('Option "--target" was removed');
+    } finally {
+      oldDir.cleanup();
+      newDir.cleanup();
+      fixture.cleanup();
+    }
+  });
+
+  it("diff reports identical contracts as a match, exit 0", () => {
+    const oldDir = makeTempDir();
+    const newDir = makeTempDir();
+    try {
+      runCli(oldDir.dir, ["init", FIXTURE]);
+      runCli(newDir.dir, ["init", FIXTURE]);
+
+      const oldContractPath = path.join(oldDir.dir, ".cliguard", "contract.json");
+      const newContractPath = path.join(newDir.dir, ".cliguard", "contract.json");
+
+      const { status, output } = runCli(oldDir.dir, ["diff", oldContractPath, newContractPath]);
+      expect(status).toBe(0);
+      expect(output).toContain("Contracts are identical");
+    } finally {
+      oldDir.cleanup();
+      newDir.cleanup();
+    }
+  });
+
+  it("diff --json respects an accepted break the same way check does", () => {
+    const oldDir = makeTempDir();
+    const newDir = makeTempDir();
+    const fixture = writeModifiedFixture((source) =>
+      source
+        .split("\n")
+        .filter((line) => !line.includes(".requiredOption("))
+        .join("\n"),
+    );
+    const changePath = "root -> build -> option[--target]";
+    try {
+      runCli(oldDir.dir, ["init", FIXTURE]);
+      runCli(newDir.dir, ["init", fixture.path]);
+      // accept records into oldDir's own .cliguard/accepted-breaks.json -
+      // diff below runs with oldDir as cwd, so it picks that file up.
+      // Entry is the *modified* fixture: accept diffs oldDir's committed
+      // contract against a fresh extraction, same as check would.
+      runCli(oldDir.dir, ["accept", fixture.path, changePath, "--reason", "intentional"]);
+
+      const oldContractPath = path.join(oldDir.dir, ".cliguard", "contract.json");
+      const newContractPath = path.join(newDir.dir, ".cliguard", "contract.json");
+
+      const { status, output } = runCli(oldDir.dir, [
+        "diff",
+        oldContractPath,
+        newContractPath,
+        "--json",
+      ]);
+      expect(status).toBe(0);
+      const result = JSON.parse(output) as { ok: boolean; summary: object };
+      expect(result.ok).toBe(true);
+      expect(result.summary).toEqual({
+        breaking: 0,
+        acknowledgedBreaking: 1,
+        additive: 0,
+        patch: 0,
+      });
+    } finally {
+      oldDir.cleanup();
+      newDir.cleanup();
+      fixture.cleanup();
+    }
+  });
+
+  it("diff fails with a clear error when a file doesn't exist", () => {
+    const { dir, cleanup } = makeTempDir();
+    try {
+      const { status, output } = runCli(dir, ["diff", "nope-a.json", "nope-b.json"]);
+      expect(status).toBe(1);
+      expect(output).toContain("no such file");
+    } finally {
+      cleanup();
+    }
+  });
+
   it("--version prints the version from package.json", () => {
     const { dir, cleanup } = makeTempDir();
     try {

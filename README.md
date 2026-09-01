@@ -123,6 +123,8 @@ npx cliguard check ./bin/cli.js --json
 }
 ```
 
+`suggestedBump` is the semver bump this diff implies (`"major"`, `"minor"`, `"patch"`, or `null` if nothing changed) - a direct read of the same BREAKING/ADDITIVE/PATCH classification the emoji output already uses, so a release script never has to re-derive it.
+
 ### Accepting an intentional breaking change
 
 Sometimes a `BREAKING` change is exactly what you meant to ship - a flag genuinely needed to go away in a major version. Running `cliguard update` after a real, intentional break re-baselines the *entire* contract silently; it doesn't leave a record of what changed or why. `cliguard accept` does:
@@ -133,7 +135,15 @@ npx cliguard accept ./bin/cli.js "root -> build -> option[--target]" --reason "r
 
 This only works against a change `check` would currently report as `BREAKING` - it reads the exact `path` from your own `check` output (text or `--json`), so there's nothing to guess. It writes `.cliguard/accepted-breaks.json` (commit this file); from then on, `check` still shows that change - now as a 🟣 acknowledged line with the reason attached - but stops counting it toward the `BREAKING` total that fails your build. Any *other*, un-accepted breaking change still fails CI as normal. Once you're done, `cliguard update` still re-baselines the contract to match reality, same as always.
 
-`suggestedBump` is the semver bump this diff implies (`"major"`, `"minor"`, `"patch"`, or `null` if nothing changed) - a direct read of the same BREAKING/ADDITIVE/PATCH classification the emoji output already uses, so a release script never has to re-derive it.
+### Comparing two contracts directly
+
+`cliguard diff <old.json> <new.json>` runs the same comparison as `check`, but reads both sides straight off disk instead of running any CLI - useful for comparing two tags' committed contracts (`git show v1.0.0:.cliguard/contract.json > old.json`), or reviewing a contract change in a PR without a working copy of the target CLI at all:
+
+```sh
+npx cliguard diff old-contract.json new-contract.json --json
+```
+
+It respects `.cliguard/accepted-breaks.json` the same way `check` does, and exits `1` on an un-acknowledged `BREAKING` change.
 
 ## How changes get classified
 

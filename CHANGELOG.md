@@ -11,6 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- `cliguard diff <old.json> <new.json>`: compares two contract files
+  directly - no adapter, no target CLI ever loaded - for diffing two tags'
+  committed contracts or reviewing a contract change without a working
+  copy of the target CLI. Respects `.cliguard/accepted-breaks.json` and
+  exits `1` on an un-acknowledged `BREAKING` change, same as `check`.
 - `cliguard accept <entry> <path> --reason "<text>"`: records that a specific
   `BREAKING` change is intentional, in a committed, auditable
   `.cliguard/accepted-breaks.json`. `check` still shows an accepted change

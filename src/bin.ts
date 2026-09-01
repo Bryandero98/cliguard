@@ -12,6 +12,7 @@ import {
   getContractDisplayPath,
   readAcceptedBreaks,
   readContract,
+  readContractFile,
   writeAcceptedBreaks,
   writeContract,
 } from "./core/storage";
@@ -181,6 +182,39 @@ program
       return 0;
     });
     process.exit(exitCode);
+  });
+
+program
+  .command("diff")
+  .description("Compare two contract files directly, without running any CLI")
+  .argument("<oldContract>", "path to the older contract JSON file")
+  .argument("<newContract>", "path to the newer contract JSON file")
+  .option("--json", "print a machine-readable JSON result instead of text", false)
+  .action((oldPath: string, newPath: string, options: { json: boolean }) => {
+    // No adapter, no target CLI ever loaded here - just two files off
+    // disk - so none of withSuppressedExit's process.exit-race concerns
+    // apply. A thrown Error (bad path, corrupt JSON) still surfaces via
+    // this program's own top-level parseAsync().catch() below.
+    const oldContract = readContractFile(oldPath);
+    const newContract = readContractFile(newPath);
+    const diff = diffEngine.compare(oldContract, newContract);
+    const acceptedPaths = indexAcceptedBreaks(readAcceptedBreaks());
+    const hasBreaking = diff.some(
+      (change) => change.type === ChangeType.BREAKING && !acceptedPaths.has(change.path),
+    );
+
+    if (options.json) {
+      console.log(JSON.stringify(toJsonResult(diff, acceptedPaths), null, 2));
+      process.exit(hasBreaking ? 1 : 0);
+    }
+
+    if (diff.length === 0) {
+      console.log("✅ Contracts are identical.");
+      process.exit(0);
+    }
+
+    printDiff(diff, acceptedPaths);
+    process.exit(hasBreaking ? 1 : 0);
   });
 
 /**
