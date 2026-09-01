@@ -207,6 +207,20 @@ It respects `.cliguard/accepted-breaks.json` the same way `check` does, and exit
 npx cliguard preview ./bin/cli.js --adapter yargs
 ```
 
+### Generating CLI reference docs that can't drift
+
+`cliguard docs <entry>` walks the same extracted contract `check` already fails CI over, and renders it as Markdown - one section per command, a table of its arguments, a table of its options (flag, default, description, whether it's required):
+
+```sh
+npx cliguard docs ./bin/cli.js > CLI.md
+```
+
+Commit `CLI.md` and add `--check` to catch it going stale the same way `check` catches the contract going stale - it exits `1` the moment the generated docs and the committed file disagree, instead of drifting silently the way hand-written or copy-pasted-from-`--help` docs do:
+
+```sh
+npx cliguard docs ./bin/cli.js --check CLI.md
+```
+
 ### Checking an adapter's real limitations, or sanity-checking one against your CLI
 
 Every adapter has a couple of real, framework-shape gaps (see "Supported frameworks" below) - `cliguard doctor` surfaces them directly instead of leaving them to a code comment only a maintainer would read:

@@ -88,4 +88,12 @@ describe('programmatic API (require("cliguard"))', () => {
 
     expect(cliguard.toJUnitXml(diff)).toContain('tests="0"');
   });
+
+  it("renderMarkdownDocs is usable directly against extractContract's own output", async () => {
+    const contract = await cliguard.extractContract(FIXTURE);
+
+    const markdown = cliguard.renderMarkdownDocs(contract, "fallback");
+
+    expect(markdown).toContain("## `build <entry> [extra...]`");
+  });
 });

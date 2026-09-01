@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- `cliguard docs <entry>`: renders the extracted contract as Markdown CLI
+  reference docs (one section per command, an arguments table, an options
+  table with flag/default/description/required) - the same model `check`
+  fails CI over, so these docs can't drift from the real CLI surface
+  without `check` catching it first. `--check <path>` compares against a
+  committed docs file and exits `1` if it's stale, same spirit as `check`
+  itself. Also exported from the programmatic API as `renderMarkdownDocs`.
+  Closes #6.
+
 ## [0.7.1] - 2026-09-01
 
 ### Fixed

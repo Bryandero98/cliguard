@@ -20,6 +20,7 @@ export { applyConfig, configExists, loadConfig } from "./core/config";
 export type { CliguardConfig, SeverityOverride } from "./core/config";
 export { DiffEngine } from "./core/diff.engine";
 export type { CompareOptions, DiffResult } from "./core/diff.engine";
+export { renderMarkdownDocs } from "./core/docs";
 export { toGitLabCodeQuality, toJUnitXml, toRdjsonl } from "./core/report-formats";
 export type { ReportChange } from "./core/report-formats";
 export {

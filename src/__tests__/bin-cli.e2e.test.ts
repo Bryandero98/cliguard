@@ -613,6 +613,59 @@ describe("cliguard CLI (subprocess)", () => {
     }
   });
 
+  it("docs prints Markdown reference docs built from the extracted contract", () => {
+    const { dir, cleanup } = makeTempDir();
+    try {
+      const { status, output } = runCli(dir, ["docs", FIXTURE]);
+      expect(status).toBe(0);
+      expect(output).toContain("## `build <entry> [extra...]`");
+      expect(output).toContain("| `-t, --target <target>` | - | build target *(required)* |");
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("docs --check exits 1 naming the file when no docs have been committed yet", () => {
+    const { dir, cleanup } = makeTempDir();
+    try {
+      const { status, output } = runCli(dir, ["docs", FIXTURE, "--check", "CLI.md"]);
+      expect(status).toBe(1);
+      expect(output).toContain('no such file: "CLI.md"');
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("docs --check round-trips cleanly against its own freshly-generated output (regression: console.log's extra newline used to make this never match)", () => {
+    const { dir, cleanup } = makeTempDir();
+    try {
+      const generated = runCli(dir, ["docs", FIXTURE]);
+      expect(generated.status).toBe(0);
+      const docsPath = path.join(dir, "CLI.md");
+      writeFileSync(docsPath, generated.output);
+
+      const { status, output } = runCli(dir, ["docs", FIXTURE, "--check", docsPath]);
+      expect(status).toBe(0);
+      expect(output).toContain("matches the current CLI surface");
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("docs --check exits 1 and says stale when the committed docs no longer match the CLI", () => {
+    const { dir, cleanup } = makeTempDir();
+    try {
+      const docsPath = path.join(dir, "CLI.md");
+      writeFileSync(docsPath, "# stale, hand-written docs\n");
+
+      const { status, output } = runCli(dir, ["docs", FIXTURE, "--check", docsPath]);
+      expect(status).toBe(1);
+      expect(output).toContain("is stale");
+    } finally {
+      cleanup();
+    }
+  });
+
   it("init --with-ci scaffolds a GitHub Actions workflow alongside the contract", () => {
     const { dir, cleanup } = makeTempDir();
     try {

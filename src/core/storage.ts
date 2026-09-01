@@ -206,6 +206,11 @@ export function hookExists(hookName: string): boolean {
   return existsSync(join(resolveHooksDir(), hookName));
 }
 
+/** Reads an arbitrary user-supplied text file (not one of cliguard's own fixed `.cliguard/*` paths) - `null` when it doesn't exist, since "no committed docs yet" is a normal, expected state for `cliguard docs --check`, not an error. */
+export function readTextFileIfExists(path: string): string | null {
+  return existsSync(path) ? readFileSync(path, "utf-8") : null;
+}
+
 /** Never called when hookExists() is true - install-hook checks first so a hand-edited hook is never clobbered. */
 export function writeHook(hookName: string, content: string): void {
   const hookPath = join(resolveHooksDir(), hookName);

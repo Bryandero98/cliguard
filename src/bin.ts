@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 import { Command } from "commander";
-import { relative, resolve } from "path";
+import { basename, relative, resolve } from "path";
 
 import { adapters, resolveAdapter } from "./adapters/registry";
 import { applyConfig, loadConfig } from "./core/config";
 import { DiffEngine, type DiffResult } from "./core/diff.engine";
+import { renderMarkdownDocs } from "./core/docs";
 import { toGitLabCodeQuality, toJUnitXml, toRdjsonl } from "./core/report-formats";
 import {
   ciWorkflowExists,
@@ -20,6 +21,7 @@ import {
   readContractAtRef,
   readContractFile,
   readDeprecations,
+  readTextFileIfExists,
   writeAcceptedBreaks,
   writeCiWorkflow,
   writeContract,
@@ -358,6 +360,52 @@ program
       const contract = await resolveAdapter(options.adapter).extract(entry);
       console.log(JSON.stringify(contract, null, 2));
       return 0;
+    });
+    process.exit(exitCode);
+  });
+
+program
+  .command("docs")
+  .description(
+    "Generate Markdown CLI reference docs from the current contract - guaranteed to match the real CLI surface, since it's the same model `check` fails CI over",
+  )
+  .argument("<entry>", "path to the target CLI's entry file")
+  .option(...adapterOption)
+  .option(
+    "--check <path>",
+    "compare against a committed docs file instead of printing - exits 1 if it's stale",
+  )
+  .action(async (entry: string, options: { adapter: string; check?: string }) => {
+    const exitCode = await withSuppressedExit(async () => {
+      const contract = await resolveAdapter(options.adapter).extract(entry);
+      const markdown = renderMarkdownDocs(contract, basename(entry));
+
+      if (!options.check) {
+        // process.stdout.write, not console.log - markdown already ends
+        // in exactly one trailing newline, and console.log would add a
+        // second one, so a file saved via `> CLI.md` would never again
+        // match itself under `--check` (the mismatch this comment is
+        // replacing was caught by a live round-trip test, not review).
+        process.stdout.write(markdown);
+        return 0;
+      }
+
+      const committed = readTextFileIfExists(options.check);
+      if (committed === null) {
+        console.error(
+          `cliguard: no such file: "${options.check}". Run \`cliguard docs ${entry} > ${options.check}\` first.`,
+        );
+        return 1;
+      }
+      if (committed === markdown) {
+        console.log(`✅ ${options.check} matches the current CLI surface.`);
+        return 0;
+      }
+      console.error(
+        `cliguard: "${options.check}" is stale - it no longer matches the current CLI surface. ` +
+          `Regenerate with \`cliguard docs ${entry} > ${options.check}\`.`,
+      );
+      return 1;
     });
     process.exit(exitCode);
   });
