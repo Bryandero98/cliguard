@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - `cliguard preview <entry>`: extracts and prints the current CLI's contract
   without writing `.cliguard/contract.json` - useful for sanity-checking a
   new adapter or a target CLI's extraction before committing a baseline.
+- `cliguard init --with-ci`: scaffolds `.github/workflows/cliguard.yml`
+  (the same workflow the README documents by hand) alongside the baseline
+  contract, so wiring up CI is no longer a separate manual step. Never
+  overwrites an existing workflow file.
 
 ## [0.6.0] - 2026-08-31
 

@@ -5,6 +5,7 @@ import type { AcceptedBreak, Contract } from "./types";
 
 const CONTRACT_PATH = join(process.cwd(), ".cliguard", "contract.json");
 const ACCEPTED_BREAKS_PATH = join(process.cwd(), ".cliguard", "accepted-breaks.json");
+const CI_WORKFLOW_PATH = join(process.cwd(), ".github", "workflows", "cliguard.yml");
 
 /** Contract path relative to cwd, normalized to forward slashes - display only, never used for I/O. */
 export function getContractDisplayPath(): string {
@@ -92,4 +93,19 @@ export function readAcceptedBreaks(): AcceptedBreak[] {
 export function writeAcceptedBreaks(breaks: readonly AcceptedBreak[]): void {
   mkdirSync(dirname(ACCEPTED_BREAKS_PATH), { recursive: true });
   writeFileSync(ACCEPTED_BREAKS_PATH, JSON.stringify(breaks, null, 2) + "\n", "utf-8");
+}
+
+/** CI workflow path relative to cwd, normalized to forward slashes - display only, never used for I/O. */
+export function getCiWorkflowDisplayPath(): string {
+  return relative(process.cwd(), CI_WORKFLOW_PATH).split("\\").join("/");
+}
+
+export function ciWorkflowExists(): boolean {
+  return existsSync(CI_WORKFLOW_PATH);
+}
+
+/** Never called when ciWorkflowExists() is true - `init --with-ci` checks first so a hand-edited workflow is never clobbered. */
+export function writeCiWorkflow(content: string): void {
+  mkdirSync(dirname(CI_WORKFLOW_PATH), { recursive: true });
+  writeFileSync(CI_WORKFLOW_PATH, content, "utf-8");
 }

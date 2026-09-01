@@ -464,6 +464,59 @@ describe("cliguard CLI (subprocess)", () => {
     }
   });
 
+  it("init --with-ci scaffolds a GitHub Actions workflow alongside the contract", () => {
+    const { dir, cleanup } = makeTempDir();
+    try {
+      const { status } = runCli(dir, ["init", FIXTURE, "--with-ci"]);
+      expect(status).toBe(0);
+
+      const workflowPath = path.join(dir, ".github", "workflows", "cliguard.yml");
+      expect(existsSync(workflowPath)).toBe(true);
+      const workflow = readFileSync(workflowPath, "utf8");
+      expect(workflow).toContain("uses: Bryandero98/cliguard@v1");
+      expect(workflow).toContain("entry:");
+      // Default adapter ("commander") is never spelled out - matches the
+      // Action's own input default, same as the README's example.
+      expect(workflow).not.toContain("adapter:");
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("init --with-ci includes an explicit adapter line for a non-default adapter", () => {
+    const { dir, cleanup } = makeTempDir();
+    const yargsFixture = path.join(__dirname, "..", "__fixtures__", "basic-yargs-cli.js");
+    try {
+      runCli(dir, ["init", yargsFixture, "--with-ci", "--adapter", "yargs"]);
+
+      const workflow = readFileSync(path.join(dir, ".github", "workflows", "cliguard.yml"), "utf8");
+      expect(workflow).toContain("adapter: yargs");
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("init --with-ci never overwrites an existing workflow file", () => {
+    const { dir, cleanup } = makeTempDir();
+    try {
+      runCli(dir, ["init", FIXTURE, "--with-ci"]);
+      const workflowPath = path.join(dir, ".github", "workflows", "cliguard.yml");
+      writeFileSync(workflowPath, "# hand-customized, do not touch\n");
+
+      // A fresh contract is required for a second init to even run - delete
+      // it first so this test isolates "does --with-ci ever overwrite the
+      // workflow", not "init refuses to run twice".
+      rmSync(path.join(dir, ".cliguard", "contract.json"));
+      const { status, output } = runCli(dir, ["init", FIXTURE, "--with-ci"]);
+
+      expect(status).toBe(0);
+      expect(output).toContain("already exists");
+      expect(readFileSync(workflowPath, "utf8")).toBe("# hand-customized, do not touch\n");
+    } finally {
+      cleanup();
+    }
+  });
+
   it("--version prints the version from package.json", () => {
     const { dir, cleanup } = makeTempDir();
     try {

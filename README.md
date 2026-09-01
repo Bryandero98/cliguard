@@ -97,6 +97,9 @@ Then:
 # Capture the current contract - commit .cliguard/contract.json
 npx cliguard init ./bin/cli.js
 
+# Same, plus scaffold .github/workflows/cliguard.yml so CI is wired up too
+npx cliguard init ./bin/cli.js --with-ci
+
 # In CI: fail the build on any breaking change
 npx cliguard check ./bin/cli.js
 
@@ -165,6 +168,8 @@ npx cliguard preview ./bin/cli.js --adapter yargs
 Full rules live in [`src/core/diff.engine.ts`](src/core/diff.engine.ts) - it's the one file worth reading if you want to know exactly why something was flagged.
 
 ## CI integration
+
+`cliguard init --with-ci` scaffolds the workflow below for you - `git add .github/workflows/cliguard.yml` and you're done. Prefer to see it first, or wire it up by hand? Read on.
 
 The bundled GitHub Action (`Bryandero98/cliguard@v1`) is the recommended way to run this in CI: on top of the same exit-code gate as `npx cliguard check`, it posts the diff as a PR comment - updated in place on every push, not a new one each time - so a reviewer sees exactly what changed without opening the CI log:
 
