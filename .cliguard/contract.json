@@ -1,0 +1,45 @@
+{
+  "contractVersion": 1,
+  "adapter": "commander",
+  "capturedAt": "2026-09-01T02:42:06.229Z",
+  "root": {
+    "name": "",
+    "description": "",
+    "aliases": [],
+    "options": [],
+    "arguments": [],
+    "subcommands": [
+      {
+        "name": "deploy",
+        "description": "",
+        "aliases": [],
+        "options": [
+          {
+            "flags": "-e, --env <env>",
+            "name": "env",
+            "aliases": [
+              "-e"
+            ],
+            "description": "target environment",
+            "required": true,
+            "valueType": "string",
+            "variadic": false,
+            "defaultValue": null
+          },
+          {
+            "flags": "--dry-run",
+            "name": "dry-run",
+            "aliases": [],
+            "description": "don't actually deploy",
+            "required": false,
+            "valueType": "boolean",
+            "variadic": false,
+            "defaultValue": null
+          }
+        ],
+        "arguments": [],
+        "subcommands": []
+      }
+    ]
+  }
+}
