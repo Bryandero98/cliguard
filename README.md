@@ -145,6 +145,14 @@ npx cliguard diff old-contract.json new-contract.json --json
 
 It respects `.cliguard/accepted-breaks.json` the same way `check` does, and exits `1` on an un-acknowledged `BREAKING` change.
 
+### Previewing a contract without committing it
+
+`cliguard preview <entry>` runs the same extraction `init` would, but prints the contract to stdout instead of writing `.cliguard/contract.json` - useful for sanity-checking what a new adapter or a lazily-built target CLI actually captures before you commit to it as the baseline:
+
+```sh
+npx cliguard preview ./bin/cli.js --adapter yargs
+```
+
 ## How changes get classified
 
 | | Removed | Added | Required flipped | Value type / default changed |

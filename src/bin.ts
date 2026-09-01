@@ -185,6 +185,22 @@ program
   });
 
 program
+  .command("preview")
+  .description(
+    "Extract the current CLI's contract and print it, without writing .cliguard/contract.json",
+  )
+  .argument("<entry>", "path to the target CLI's entry file")
+  .option(...adapterOption)
+  .action(async (entry: string, options: { adapter: string }) => {
+    const exitCode = await withSuppressedExit(async () => {
+      const contract = await resolveAdapter(options.adapter).extract(entry);
+      console.log(JSON.stringify(contract, null, 2));
+      return 0;
+    });
+    process.exit(exitCode);
+  });
+
+program
   .command("diff")
   .description("Compare two contract files directly, without running any CLI")
   .argument("<oldContract>", "path to the older contract JSON file")

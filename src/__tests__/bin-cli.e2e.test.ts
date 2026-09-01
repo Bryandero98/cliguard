@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "fs";
 import path from "path";
 
 import { ensureDir, makeTempDir, runCli } from "../test-helpers/run-cli";
@@ -426,6 +426,39 @@ describe("cliguard CLI (subprocess)", () => {
       const { status, output } = runCli(dir, ["diff", "nope-a.json", "nope-b.json"]);
       expect(status).toBe(1);
       expect(output).toContain("no such file");
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("preview prints the extracted contract without writing .cliguard/contract.json", () => {
+    const { dir, cleanup } = makeTempDir();
+    try {
+      const { status, output } = runCli(dir, ["preview", FIXTURE]);
+      expect(status).toBe(0);
+      const contract = JSON.parse(output);
+      expect(contract.contractVersion).toBe(1);
+      expect(contract.root).toBeDefined();
+      expect(existsSync(path.join(dir, ".cliguard", "contract.json"))).toBe(false);
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("preview's own output is a valid contract - init on top of it and check reports intact", () => {
+    const { dir, cleanup } = makeTempDir();
+    try {
+      const preview = runCli(dir, ["preview", FIXTURE]);
+      writeFileSync(path.join(dir, "previewed-contract.json"), preview.output);
+
+      runCli(dir, ["init", FIXTURE]);
+      const { status, output } = runCli(dir, [
+        "diff",
+        path.join(dir, "previewed-contract.json"),
+        path.join(dir, ".cliguard", "contract.json"),
+      ]);
+      expect(status).toBe(0);
+      expect(output).toContain("Contracts are identical.");
     } finally {
       cleanup();
     }

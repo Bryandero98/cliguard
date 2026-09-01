@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- `cliguard preview <entry>`: extracts and prints the current CLI's contract
+  without writing `.cliguard/contract.json` - useful for sanity-checking a
+  new adapter or a target CLI's extraction before committing a baseline.
+
 ## [0.6.0] - 2026-08-31
 
 ### Added
