@@ -21,6 +21,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   instead of the `.cliguard/contract.json` on disk. Removes the single
   biggest source of CI friction: a PR branch no longer needs its own
   freshly-checked-out baseline file just to run `check`.
+- `cliguard install-hook <entry>`: installs a git `pre-push` (or
+  `--hook pre-commit`) hook that runs `cliguard check` automatically -
+  catches a breaking change before it ever reaches CI, not just at it.
+  Never overwrites an existing hook.
 - `cliguard deprecate <entry> <path> --remove-by <version|date>`: schedules
   a command/option/argument for removal ahead of time, committed to
   `.cliguard/deprecations.json`. `check`/`diff` then reclassify that

@@ -1,6 +1,6 @@
 import { execFileSync } from "child_process";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
-import { dirname, join, relative } from "path";
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
+import { dirname, join, relative, resolve as resolvePath } from "path";
 
 import type { AcceptedBreak, Contract, Deprecation } from "./types";
 
@@ -175,4 +175,47 @@ export function ciWorkflowExists(): boolean {
 export function writeCiWorkflow(content: string): void {
   mkdirSync(dirname(CI_WORKFLOW_PATH), { recursive: true });
   writeFileSync(CI_WORKFLOW_PATH, content, "utf-8");
+}
+
+/**
+ * `git rev-parse --git-path hooks` rather than a hardcoded `.git/hooks` -
+ * correct even when a repo sets `core.hooksPath`, is a worktree (`.git` is
+ * a file, not a directory, pointing elsewhere), or is a submodule.
+ */
+function resolveHooksDir(): string {
+  let out: string;
+  try {
+    out = execFileSync("git", ["rev-parse", "--git-path", "hooks"], {
+      encoding: "utf-8",
+      stdio: ["ignore", "pipe", "pipe"],
+    }).trim();
+  } catch {
+    throw new Error(
+      "cliguard: not a git repository (or git isn't installed) - install-hook needs one.",
+    );
+  }
+  return resolvePath(process.cwd(), out);
+}
+
+/** Hook path relative to cwd, normalized to forward slashes - display only, never used for I/O. */
+export function getHookDisplayPath(hookName: string): string {
+  return relative(process.cwd(), join(resolveHooksDir(), hookName)).split("\\").join("/");
+}
+
+export function hookExists(hookName: string): boolean {
+  return existsSync(join(resolveHooksDir(), hookName));
+}
+
+/** Never called when hookExists() is true - install-hook checks first so a hand-edited hook is never clobbered. */
+export function writeHook(hookName: string, content: string): void {
+  const hookPath = join(resolveHooksDir(), hookName);
+  mkdirSync(dirname(hookPath), { recursive: true });
+  writeFileSync(hookPath, content, "utf-8");
+  try {
+    chmodSync(hookPath, 0o755);
+  } catch {
+    // Best-effort: Windows filesystems mostly ignore the Unix exec bit
+    // anyway, and Git for Windows runs hooks via its own shebang handling
+    // regardless - a failed chmod here shouldn't fail the whole command.
+  }
 }

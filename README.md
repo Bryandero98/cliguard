@@ -180,6 +180,18 @@ It respects `.cliguard/accepted-breaks.json` the same way `check` does, and exit
 npx cliguard preview ./bin/cli.js --adapter yargs
 ```
 
+### Catching a breaking change before it reaches CI
+
+`cliguard install-hook <entry>` installs a git hook (`pre-push` by default) that runs `cliguard check` automatically, so a breaking change is caught locally instead of waiting for CI to say so:
+
+```sh
+npx cliguard install-hook ./bin/cli.js
+# or, to gate every commit instead of every push:
+npx cliguard install-hook ./bin/cli.js --hook pre-commit
+```
+
+Never overwrites a hook that's already there - if you're already using [husky](https://typicode.github.io/husky/) or a similar tool, add the same `npx cliguard check ...` line to your existing hook instead.
+
 ## How changes get classified
 
 | | Removed | Added | Required flipped | Value type / default changed |

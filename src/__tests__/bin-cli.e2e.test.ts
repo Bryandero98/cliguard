@@ -739,6 +739,89 @@ describe("cliguard CLI (subprocess)", () => {
     }
   });
 
+  it("install-hook writes an executable pre-push hook that runs check on the entry", () => {
+    const { dir, cleanup } = makeTempDir();
+    try {
+      git(dir, ["init", "-q"]);
+      const { status, output } = runCli(dir, ["install-hook", FIXTURE]);
+      expect(status).toBe(0);
+      expect(output).toContain("✅");
+
+      const hookPath = path.join(dir, ".git", "hooks", "pre-push");
+      expect(existsSync(hookPath)).toBe(true);
+      const hook = readFileSync(hookPath, "utf8");
+      expect(hook).toContain("#!/bin/sh");
+      expect(hook).toContain("npx cliguard check");
+      expect(hook).not.toContain("--adapter");
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("install-hook --hook pre-commit installs the other hook and includes a non-default adapter flag", () => {
+    const { dir, cleanup } = makeTempDir();
+    try {
+      git(dir, ["init", "-q"]);
+      const { status } = runCli(dir, [
+        "install-hook",
+        FIXTURE,
+        "--hook",
+        "pre-commit",
+        "--adapter",
+        "yargs",
+      ]);
+      expect(status).toBe(0);
+
+      const hook = readFileSync(path.join(dir, ".git", "hooks", "pre-commit"), "utf8");
+      expect(hook).toContain("--adapter yargs");
+      expect(existsSync(path.join(dir, ".git", "hooks", "pre-push"))).toBe(false);
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("install-hook never overwrites an existing hook", () => {
+    const { dir, cleanup } = makeTempDir();
+    try {
+      git(dir, ["init", "-q"]);
+      runCli(dir, ["install-hook", FIXTURE]);
+      const hookPath = path.join(dir, ".git", "hooks", "pre-push");
+      writeFileSync(hookPath, "#!/bin/sh\necho hand-customized\n");
+
+      const { status, output } = runCli(dir, ["install-hook", FIXTURE]);
+      expect(status).toBe(0);
+      expect(output).toContain("already exists");
+      expect(readFileSync(hookPath, "utf8")).toBe("#!/bin/sh\necho hand-customized\n");
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("install-hook rejects an unknown --hook name", () => {
+    const { dir, cleanup } = makeTempDir();
+    try {
+      git(dir, ["init", "-q"]);
+      const { status, output } = runCli(dir, ["install-hook", FIXTURE, "--hook", "pre-merge"]);
+      expect(status).toBe(1);
+      expect(output).toContain("pre-commit");
+      expect(output).toContain("pre-push");
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("install-hook fails with a clear error outside a git repository", () => {
+    const { dir, cleanup } = makeTempDir();
+    try {
+      // Deliberately no git init - dir is a plain temp directory.
+      const { status, output } = runCli(dir, ["install-hook", FIXTURE]);
+      expect(status).not.toBe(0);
+      expect(output).toContain("not a git repository");
+    } finally {
+      cleanup();
+    }
+  });
+
   it("--version prints the version from package.json", () => {
     const { dir, cleanup } = makeTempDir();
     try {

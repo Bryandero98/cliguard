@@ -14,6 +14,8 @@ import {
   getCiWorkflowDisplayPath,
   getContractDisplayPath,
   getDeprecationsDisplayPath,
+  getHookDisplayPath,
+  hookExists,
   readAcceptedBreaks,
   readContract,
   readContractAtRef,
@@ -23,6 +25,7 @@ import {
   writeCiWorkflow,
   writeContract,
   writeDeprecations,
+  writeHook,
 } from "./core/storage";
 import { ChangeType, type AcceptedBreak, type Deprecation } from "./core/types";
 
@@ -293,6 +296,36 @@ program
     process.exit(exitCode);
   });
 
+const HOOK_NAMES = ["pre-commit", "pre-push"] as const;
+type HookName = (typeof HOOK_NAMES)[number];
+
+program
+  .command("install-hook")
+  .description(
+    "Install a git hook that runs `cliguard check` automatically, catching a breaking change before it ever reaches CI",
+  )
+  .argument("<entry>", "path to the target CLI's entry file")
+  .option(...adapterOption)
+  .option("--hook <name>", `which git hook to install: ${HOOK_NAMES.join(" or ")}`, "pre-push")
+  .action((entry: string, options: { adapter: string; hook: string }) => {
+    if (!isHookName(options.hook)) {
+      console.error(
+        `cliguard: --hook must be one of ${HOOK_NAMES.join(", ")} - got "${options.hook}".`,
+      );
+      process.exit(1);
+    }
+
+    if (hookExists(options.hook)) {
+      console.log(`ℹ️  ${getHookDisplayPath(options.hook)} already exists - left it untouched.`);
+      process.exit(0);
+    }
+
+    const entryPath = relative(process.cwd(), resolve(entry)).split("\\").join("/");
+    writeHook(options.hook, buildHookScript(entryPath, options.adapter));
+    console.log(`✅ Git hook installed at ${getHookDisplayPath(options.hook)}.`);
+    process.exit(0);
+  });
+
 program
   .command("diff")
   .description("Compare two contract files directly, without running any CLI")
@@ -359,6 +392,25 @@ function buildCiWorkflowYaml(entryPath: string, adapter: string): string {
     lines.push(`          adapter: ${adapter}`);
   }
   return lines.join("\n") + "\n";
+}
+
+function isHookName(value: string): value is HookName {
+  return (HOOK_NAMES as readonly string[]).includes(value);
+}
+
+/**
+ * A minimal POSIX-sh script - Git for Windows runs hooks through its own
+ * bundled sh.exe via the shebang, same as any other platform, so one
+ * script body works everywhere without a separate Windows path.
+ */
+function buildHookScript(entryPath: string, adapter: string): string {
+  const adapterFlag = adapter === "commander" ? "" : ` --adapter ${adapter}`;
+  return [
+    "#!/bin/sh",
+    "# Installed by `cliguard install-hook` - edit freely, cliguard won't touch this file again.",
+    `npx cliguard check "${entryPath}"${adapterFlag}`,
+    "",
+  ].join("\n");
 }
 
 /**
