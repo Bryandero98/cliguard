@@ -1,3 +1,4 @@
+import { execFileSync } from "child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { dirname, join, relative } from "path";
 
@@ -69,6 +70,45 @@ export function readContractFile(path: string, displayPath: string = path): Cont
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
     throw new Error(`cliguard: "${displayPath}" is not valid JSON (${reason}).`);
+  }
+}
+
+/**
+ * Reads the committed contract as it existed at a git ref (a branch, tag,
+ * or commit sha) instead of the working tree - `cliguard check <entry>
+ * --against origin/main` needs no local `.cliguard/contract.json` at all,
+ * closing the CI-friction gap `readContractFile`'s own doc comment above
+ * already names as the manual workaround (`git show <ref>:... > old.json`
+ * piped into `cliguard diff`).
+ */
+export function readContractAtRef(ref: string): Contract {
+  const contractGitPath = getContractDisplayPath();
+  let raw: string;
+  try {
+    raw = execFileSync("git", ["show", `${ref}:${contractGitPath}`], {
+      encoding: "utf-8",
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+  } catch (error) {
+    const stderr =
+      error && typeof error === "object" && "stderr" in error
+        ? String((error as { stderr: unknown }).stderr).trim()
+        : undefined;
+    throw new Error(
+      `cliguard: couldn't read "${contractGitPath}" at ref "${ref}"` +
+        (stderr ? ` (${stderr})` : ".") +
+        ` Make sure "${ref}" exists and has a contract committed at that path - ` +
+        `a shallow clone may need \`git fetch --deepen\` or \`git fetch origin ${ref}\` first.`,
+    );
+  }
+
+  try {
+    return JSON.parse(raw) as Contract;
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `cliguard: "${contractGitPath}" at ref "${ref}" is not valid JSON (${reason}).`,
+    );
   }
 }
 

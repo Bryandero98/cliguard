@@ -1,7 +1,30 @@
+import { execFileSync } from "child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "fs";
 import path from "path";
 
 import { ensureDir, makeTempDir, runCli } from "../test-helpers/run-cli";
+
+// A throwaway git identity, scoped to a single command via -c flags rather
+// than relying on (or polluting) any real global/user git config - keeps
+// these tests self-contained on a machine that's never run `git config
+// user.email` at all, CI included.
+const GIT_IDENTITY = [
+  "-c",
+  "user.email=cliguard-test@example.com",
+  "-c",
+  "user.name=cliguard-test",
+];
+
+function git(dir: string, args: string[]): void {
+  execFileSync("git", [...GIT_IDENTITY, ...args], { cwd: dir, stdio: "pipe" });
+}
+
+/** Commits the current contents of `dir` (expected: a fresh contract.json from `init`) as the repo's first commit. */
+function commitContract(dir: string): void {
+  git(dir, ["init", "-q", "-b", "main"]);
+  git(dir, ["add", "."]);
+  git(dir, ["commit", "-q", "-m", "cliguard baseline"]);
+}
 
 // Exercises the full init/check/update flow through the real built CLI
 // (a subprocess, not an in-process call) - what a user actually runs.
@@ -512,6 +535,79 @@ describe("cliguard CLI (subprocess)", () => {
       expect(status).toBe(0);
       expect(output).toContain("already exists");
       expect(readFileSync(workflowPath, "utf8")).toBe("# hand-customized, do not touch\n");
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("check --against <ref> compares against a git ref's committed contract instead of the file on disk", () => {
+    const { dir, cleanup } = makeTempDir();
+    const fixture = writeModifiedFixture((source) =>
+      source
+        .split("\n")
+        .filter((line) => !line.includes(".requiredOption("))
+        .join("\n"),
+    );
+    try {
+      runCli(dir, ["init", FIXTURE]);
+      commitContract(dir);
+
+      // No local edits to contract.json at all - what a PR branch actually
+      // looks like: the same baseline HEAD has, diffed against a target
+      // CLI that now has a real BREAKING change.
+      const { status, output } = runCli(dir, ["check", fixture.path, "--against", "HEAD"]);
+      expect(status).toBe(1);
+      expect(output).toContain("🔴");
+      expect(output).toContain('Option "--target" was removed');
+    } finally {
+      cleanup();
+      fixture.cleanup();
+    }
+  });
+
+  it("check --against <ref> --json works the same way as the file-based path", () => {
+    const { dir, cleanup } = makeTempDir();
+    try {
+      runCli(dir, ["init", FIXTURE]);
+      commitContract(dir);
+
+      const { status, output } = runCli(dir, ["check", FIXTURE, "--against", "HEAD", "--json"]);
+      expect(status).toBe(0);
+      expect(JSON.parse(output)).toEqual({
+        ok: true,
+        changes: [],
+        summary: { breaking: 0, acknowledgedBreaking: 0, additive: 0, patch: 0 },
+        suggestedBump: null,
+      });
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("check --against <ref> fails with a clear error for a ref that doesn't exist", () => {
+    const { dir, cleanup } = makeTempDir();
+    try {
+      runCli(dir, ["init", FIXTURE]);
+      commitContract(dir);
+
+      const { status, output } = runCli(dir, ["check", FIXTURE, "--against", "no-such-ref"]);
+      expect(status).toBe(1);
+      expect(output).toContain("no-such-ref");
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("check --against <ref> fails with a clear error outside a git repository", () => {
+    const { dir, cleanup } = makeTempDir();
+    try {
+      runCli(dir, ["init", FIXTURE]);
+      // Deliberately no commitContract(dir) here - dir is a plain temp
+      // directory, never a git repo.
+
+      const { status, output } = runCli(dir, ["check", FIXTURE, "--against", "HEAD"]);
+      expect(status).toBe(1);
+      expect(output).toContain("couldn't read");
     } finally {
       cleanup();
     }

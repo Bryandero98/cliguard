@@ -16,6 +16,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   (the same workflow the README documents by hand) alongside the baseline
   contract, so wiring up CI is no longer a separate manual step. Never
   overwrites an existing workflow file.
+- `cliguard check <entry> --against <ref>`: compares against a git ref's
+  committed contract (a branch, tag, or commit sha - e.g. `origin/main`)
+  instead of the `.cliguard/contract.json` on disk. Removes the single
+  biggest source of CI friction: a PR branch no longer needs its own
+  freshly-checked-out baseline file just to run `check`.
 
 ## [0.6.0] - 2026-08-31
 

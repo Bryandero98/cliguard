@@ -128,6 +128,16 @@ npx cliguard check ./bin/cli.js --json
 
 `suggestedBump` is the semver bump this diff implies (`"major"`, `"minor"`, `"patch"`, or `null` if nothing changed) - a direct read of the same BREAKING/ADDITIVE/PATCH classification the emoji output already uses, so a release script never has to re-derive it.
 
+### Comparing against a git ref instead of a local file
+
+`check` normally diffs against `.cliguard/contract.json` on disk, but a CI runner checking out a PR branch often doesn't have a freshly-updated one - `--against <ref>` reads the contract straight out of git instead, no local file required:
+
+```sh
+npx cliguard check ./bin/cli.js --against origin/main
+```
+
+Works with any ref `git show` understands - a branch, a tag, a commit sha. Combine with `--json` the same way as the file-based path.
+
 ### Accepting an intentional breaking change
 
 Sometimes a `BREAKING` change is exactly what you meant to ship - a flag genuinely needed to go away in a major version. Running `cliguard update` after a real, intentional break re-baselines the *entire* contract silently; it doesn't leave a record of what changed or why. `cliguard accept` does:

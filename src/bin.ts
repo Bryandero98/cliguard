@@ -15,6 +15,7 @@ import {
   getContractDisplayPath,
   readAcceptedBreaks,
   readContract,
+  readContractAtRef,
   readContractFile,
   writeAcceptedBreaks,
   writeCiWorkflow,
@@ -103,9 +104,13 @@ program
   .argument("<entry>", "path to the target CLI's entry file")
   .option(...adapterOption)
   .option("--json", "print a machine-readable JSON result instead of text", false)
-  .action(async (entry: string, options: { adapter: string; json: boolean }) => {
+  .option(
+    "--against <ref>",
+    "compare against a git ref's committed contract (e.g. origin/main, a tag, a commit sha) instead of the .cliguard/contract.json on disk",
+  )
+  .action(async (entry: string, options: { adapter: string; json: boolean; against?: string }) => {
     const exitCode = await withSuppressedExit(async () => {
-      const oldContract = readContract();
+      const oldContract = options.against ? readContractAtRef(options.against) : readContract();
       const newContract = await resolveAdapter(options.adapter).extract(entry);
       const diff = diffEngine.compare(oldContract, newContract);
       const acceptedPaths = indexAcceptedBreaks(readAcceptedBreaks());
