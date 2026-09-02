@@ -92,6 +92,19 @@ def main():
         except TypeError:
             return None
 
+    def resolve_default(p):
+        # A flag's own default across Click versions is either a plain
+        # bool (older/most versions: False when unset) or an internal
+        # not-JSON-serializable sentinel (newer versions, when no
+        # default= was passed) - caught live via CI running a different
+        # pip-installed Click version than local testing used. Either
+        # way the real, version-stable answer for "what value does the
+        # caller get if they never pass this flag" is False, unless an
+        # explicit bool default (e.g. default=True) was actually set.
+        if p.is_flag and not isinstance(p.default, bool):
+            return False
+        return safe_default(p.default)
+
     def dump_param(p):
         if isinstance(p, click.Argument):
             return {
@@ -108,7 +121,7 @@ def main():
             "required": bool(p.required),
             "is_flag": bool(p.is_flag),
             "multiple": bool(p.multiple),
-            "default": safe_default(p.default),
+            "default": resolve_default(p),
             "help": p.help,
         }
 
