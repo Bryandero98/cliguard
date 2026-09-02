@@ -5,6 +5,19 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.7.3] - 2026-09-02
+
+### Fixed
+
+- The click adapter's `defaultValue` for an `is_flag` option with no
+  explicit `default=` could come out `null` instead of `false`,
+  depending on which Click version was installed - some versions
+  represent "no default given" as a plain `False` internally, others
+  as a non-JSON-serializable sentinel, and only the latter case was
+  mishandled. `false` is the real, version-independent answer (that's
+  the value the caller gets if they never pass the flag) regardless of
+  how a given Click version represents "unset" internally.
+
 ## [0.7.2] - 2026-09-02
 
 ### Added
@@ -226,6 +239,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - A corrupt `.cliguard/contract.json` now names the file and suggests the
   fix instead of a generic parse error.
 
+[0.7.3]: https://github.com/Bryandero98/cliguard/compare/v0.7.2...v0.7.3
 [0.7.2]: https://github.com/Bryandero98/cliguard/compare/v0.7.1...v0.7.2
 [0.7.1]: https://github.com/Bryandero98/cliguard/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/Bryandero98/cliguard/compare/v0.6.0...v0.7.0
