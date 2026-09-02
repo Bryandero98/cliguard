@@ -4,32 +4,44 @@ import { dirname, join, relative, resolve as resolvePath } from "path";
 
 import type { AcceptedBreak, Contract, Deprecation } from "./types";
 
-const CONTRACT_PATH = join(process.cwd(), ".cliguard", "contract.json");
-const ACCEPTED_BREAKS_PATH = join(process.cwd(), ".cliguard", "accepted-breaks.json");
-const DEPRECATIONS_PATH = join(process.cwd(), ".cliguard", "deprecations.json");
+const CLIGUARD_DIR = join(process.cwd(), ".cliguard");
 const CI_WORKFLOW_PATH = join(process.cwd(), ".github", "workflows", "cliguard.yml");
 
+/**
+ * `namespace` is a config-resolved target's own `name` (see
+ * core/config.ts's `resolveTargets`) - `null` for the classic single-CLI
+ * flow, which keeps every path exactly what it always was
+ * (`.cliguard/contract.json`, not `.cliguard/null/contract.json`;
+ * `path.join` drops an empty segment the same way). A named target gets
+ * its own `.cliguard/<name>/` directory so two targets' contracts,
+ * accepted breaks, and deprecations never collide on disk.
+ */
+function targetPath(namespace: string | null, fileName: string): string {
+  return join(CLIGUARD_DIR, namespace ?? "", fileName);
+}
+
 /** Contract path relative to cwd, normalized to forward slashes - display only, never used for I/O. */
-export function getContractDisplayPath(): string {
-  return relative(process.cwd(), CONTRACT_PATH).split("\\").join("/");
+export function getContractDisplayPath(namespace: string | null = null): string {
+  return relative(process.cwd(), targetPath(namespace, "contract.json")).split("\\").join("/");
 }
 
 /** Accepted-breaks path relative to cwd, normalized to forward slashes - display only, never used for I/O. */
-export function getAcceptedBreaksDisplayPath(): string {
-  return relative(process.cwd(), ACCEPTED_BREAKS_PATH).split("\\").join("/");
+export function getAcceptedBreaksDisplayPath(namespace: string | null = null): string {
+  return relative(process.cwd(), targetPath(namespace, "accepted-breaks.json")).split("\\").join("/");
 }
 
-export function contractExists(): boolean {
-  return existsSync(CONTRACT_PATH);
+export function contractExists(namespace: string | null = null): boolean {
+  return existsSync(targetPath(namespace, "contract.json"));
 }
 
-export function readContract(): Contract {
-  if (!existsSync(CONTRACT_PATH)) {
+export function readContract(namespace: string | null = null): Contract {
+  const contractPath = targetPath(namespace, "contract.json");
+  if (!existsSync(contractPath)) {
     throw new Error(
-      `cliguard: no contract found at "${getContractDisplayPath()}". Run \`cliguard init <entry.js>\` first.`,
+      `cliguard: no contract found at "${getContractDisplayPath(namespace)}". Run \`cliguard init <entry.js>\` first.`,
     );
   }
-  const raw = readFileSync(CONTRACT_PATH, "utf-8");
+  const raw = readFileSync(contractPath, "utf-8");
   try {
     return JSON.parse(raw) as Contract;
   } catch (error) {
@@ -41,16 +53,17 @@ export function readContract(): Contract {
     // actionable message.
     const reason = error instanceof Error ? error.message : String(error);
     throw new Error(
-      `cliguard: "${getContractDisplayPath()}" is not valid JSON (${reason}). ` +
+      `cliguard: "${getContractDisplayPath(namespace)}" is not valid JSON (${reason}). ` +
         "If this file was hand-edited or came out of a bad merge, re-run " +
         "`cliguard update <entry.js>` to regenerate it.",
     );
   }
 }
 
-export function writeContract(contract: Contract): void {
-  mkdirSync(dirname(CONTRACT_PATH), { recursive: true });
-  writeFileSync(CONTRACT_PATH, JSON.stringify(contract, null, 2) + "\n", "utf-8");
+export function writeContract(contract: Contract, namespace: string | null = null): void {
+  const contractPath = targetPath(namespace, "contract.json");
+  mkdirSync(dirname(contractPath), { recursive: true });
+  writeFileSync(contractPath, JSON.stringify(contract, null, 2) + "\n", "utf-8");
 }
 
 /**
@@ -82,8 +95,8 @@ export function readContractFile(path: string, displayPath: string = path): Cont
  * already names as the manual workaround (`git show <ref>:... > old.json`
  * piped into `cliguard diff`).
  */
-export function readContractAtRef(ref: string): Contract {
-  const contractGitPath = getContractDisplayPath();
+export function readContractAtRef(ref: string, namespace: string | null = null): Contract {
+  const contractGitPath = getContractDisplayPath(namespace);
   let raw: string;
   try {
     raw = execFileSync("git", ["show", `${ref}:${contractGitPath}`], {
@@ -114,9 +127,10 @@ export function readContractAtRef(ref: string): Contract {
 }
 
 /** Unlike readContract, a missing file is normal (most projects never accept a break) - returns [] rather than throwing. */
-export function readAcceptedBreaks(): AcceptedBreak[] {
-  if (!existsSync(ACCEPTED_BREAKS_PATH)) return [];
-  const raw = readFileSync(ACCEPTED_BREAKS_PATH, "utf-8");
+export function readAcceptedBreaks(namespace: string | null = null): AcceptedBreak[] {
+  const acceptedBreaksPath = targetPath(namespace, "accepted-breaks.json");
+  if (!existsSync(acceptedBreaksPath)) return [];
+  const raw = readFileSync(acceptedBreaksPath, "utf-8");
   try {
     return JSON.parse(raw) as AcceptedBreak[];
   } catch (error) {
@@ -124,42 +138,45 @@ export function readAcceptedBreaks(): AcceptedBreak[] {
     // and the fix matters here too.
     const reason = error instanceof Error ? error.message : String(error);
     throw new Error(
-      `cliguard: "${getAcceptedBreaksDisplayPath()}" is not valid JSON (${reason}). ` +
+      `cliguard: "${getAcceptedBreaksDisplayPath(namespace)}" is not valid JSON (${reason}). ` +
         "If this file was hand-edited or came out of a bad merge, fix it or delete it " +
         "and re-run `cliguard accept` for whatever was in it.",
     );
   }
 }
 
-export function writeAcceptedBreaks(breaks: readonly AcceptedBreak[]): void {
-  mkdirSync(dirname(ACCEPTED_BREAKS_PATH), { recursive: true });
-  writeFileSync(ACCEPTED_BREAKS_PATH, JSON.stringify(breaks, null, 2) + "\n", "utf-8");
+export function writeAcceptedBreaks(breaks: readonly AcceptedBreak[], namespace: string | null = null): void {
+  const acceptedBreaksPath = targetPath(namespace, "accepted-breaks.json");
+  mkdirSync(dirname(acceptedBreaksPath), { recursive: true });
+  writeFileSync(acceptedBreaksPath, JSON.stringify(breaks, null, 2) + "\n", "utf-8");
 }
 
 /** Deprecations path relative to cwd, normalized to forward slashes - display only, never used for I/O. */
-export function getDeprecationsDisplayPath(): string {
-  return relative(process.cwd(), DEPRECATIONS_PATH).split("\\").join("/");
+export function getDeprecationsDisplayPath(namespace: string | null = null): string {
+  return relative(process.cwd(), targetPath(namespace, "deprecations.json")).split("\\").join("/");
 }
 
 /** Unlike readContract, a missing file is normal (most projects never deprecate anything) - returns [] rather than throwing. */
-export function readDeprecations(): Deprecation[] {
-  if (!existsSync(DEPRECATIONS_PATH)) return [];
-  const raw = readFileSync(DEPRECATIONS_PATH, "utf-8");
+export function readDeprecations(namespace: string | null = null): Deprecation[] {
+  const deprecationsPath = targetPath(namespace, "deprecations.json");
+  if (!existsSync(deprecationsPath)) return [];
+  const raw = readFileSync(deprecationsPath, "utf-8");
   try {
     return JSON.parse(raw) as Deprecation[];
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
     throw new Error(
-      `cliguard: "${getDeprecationsDisplayPath()}" is not valid JSON (${reason}). ` +
+      `cliguard: "${getDeprecationsDisplayPath(namespace)}" is not valid JSON (${reason}). ` +
         "If this file was hand-edited or came out of a bad merge, fix it or delete it " +
         "and re-run `cliguard deprecate` for whatever was in it.",
     );
   }
 }
 
-export function writeDeprecations(deprecations: readonly Deprecation[]): void {
-  mkdirSync(dirname(DEPRECATIONS_PATH), { recursive: true });
-  writeFileSync(DEPRECATIONS_PATH, JSON.stringify(deprecations, null, 2) + "\n", "utf-8");
+export function writeDeprecations(deprecations: readonly Deprecation[], namespace: string | null = null): void {
+  const deprecationsPath = targetPath(namespace, "deprecations.json");
+  mkdirSync(dirname(deprecationsPath), { recursive: true });
+  writeFileSync(deprecationsPath, JSON.stringify(deprecations, null, 2) + "\n", "utf-8");
 }
 
 /** CI workflow path relative to cwd, normalized to forward slashes - display only, never used for I/O. */

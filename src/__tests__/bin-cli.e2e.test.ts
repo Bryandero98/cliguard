@@ -1217,6 +1217,166 @@ describe("cliguard CLI (subprocess)", () => {
     }
   });
 
+  it("check with no entry and no configured targets fails with a clear error, not a crash", () => {
+    const { dir, cleanup } = makeTempDir();
+    try {
+      const { status, output } = runCli(dir, ["check"]);
+      expect(status).toBe(1);
+      expect(output).toContain("no entry given and no targets configured");
+    } finally {
+      cleanup();
+    }
+  });
+
+  describe("cliguard.config.js targets (monorepos with multiple CLI entry points)", () => {
+    function writeTargetsConfig(dir: string, entryA: string, entryB: string): void {
+      writeFileSync(
+        path.join(dir, "cliguard.config.js"),
+        `module.exports = { targets: [\n` +
+          `  { name: "cli-a", entry: ${JSON.stringify(entryA)} },\n` +
+          `  { name: "cli-b", entry: ${JSON.stringify(entryB)} },\n` +
+          `] };\n`,
+      );
+    }
+
+    it("init with no entry initializes every configured target, each under its own .cliguard/<name>/contract.json", () => {
+      const { dir, cleanup } = makeTempDir();
+      try {
+        writeTargetsConfig(dir, FIXTURE, FIXTURE);
+
+        const { status, output } = runCli(dir, ["init"]);
+        expect(status).toBe(0);
+        expect(output).toContain("== cli-a ==");
+        expect(output).toContain("== cli-b ==");
+        expect(existsSync(path.join(dir, ".cliguard", "cli-a", "contract.json"))).toBe(true);
+        expect(existsSync(path.join(dir, ".cliguard", "cli-b", "contract.json"))).toBe(true);
+        // No unnamespaced contract - init never ran in classic single-target mode here.
+        expect(existsSync(path.join(dir, ".cliguard", "contract.json"))).toBe(false);
+      } finally {
+        cleanup();
+      }
+    });
+
+    it("check with no entry checks every configured target and reports intact for each, with no banner for a single target run separately", () => {
+      const { dir, cleanup } = makeTempDir();
+      try {
+        writeTargetsConfig(dir, FIXTURE, FIXTURE);
+        runCli(dir, ["init"]);
+
+        const all = runCli(dir, ["check"]);
+        expect(all.status).toBe(0);
+        expect(all.output).toContain("== cli-a ==");
+        expect(all.output).toContain("== cli-b ==");
+
+        const single = runCli(dir, ["check", "cli-a"]);
+        expect(single.status).toBe(0);
+        expect(single.output).not.toContain("==");
+        expect(single.output).toContain("CLI contract is intact.");
+      } finally {
+        cleanup();
+      }
+    });
+
+    it("a BREAKING change in only one target fails the overall exit code while the other still reports intact, each under its own banner", () => {
+      const { dir, cleanup } = makeTempDir();
+      const brokenB = writeModifiedFixture((source) =>
+        source
+          .split("\n")
+          .filter((line) => !line.includes(".requiredOption("))
+          .join("\n"),
+      );
+      try {
+        writeTargetsConfig(dir, FIXTURE, FIXTURE);
+        runCli(dir, ["init"]);
+        // Re-point cli-b at the broken fixture without re-running init, the
+        // same way a real monorepo target's CLI would change between checks.
+        writeTargetsConfig(dir, FIXTURE, brokenB.path);
+
+        const { status, output } = runCli(dir, ["check"]);
+        expect(status).toBe(1);
+
+        const [, afterA] = output.split("== cli-a ==");
+        const [aSection, bSection] = afterA.split("== cli-b ==");
+        expect(aSection).toContain("CLI contract is intact.");
+        expect(bSection).toContain("🔴");
+      } finally {
+        cleanup();
+        brokenB.cleanup();
+      }
+    });
+
+    it("update <name> overwrites only that one target's contract, leaving the other target's contract untouched", () => {
+      const { dir, cleanup } = makeTempDir();
+      const changedA = writeModifiedFixture((source) =>
+        source.replace('.description("Build the project")', '.description("Build the project (v2)")'),
+      );
+      try {
+        writeTargetsConfig(dir, FIXTURE, FIXTURE);
+        runCli(dir, ["init"]);
+        const bBefore = readFileSync(path.join(dir, ".cliguard", "cli-b", "contract.json"), "utf-8");
+
+        writeTargetsConfig(dir, changedA.path, FIXTURE);
+        const { status } = runCli(dir, ["update", "cli-a"]);
+        expect(status).toBe(0);
+
+        const aAfter = readFileSync(path.join(dir, ".cliguard", "cli-a", "contract.json"), "utf-8");
+        const bAfter = readFileSync(path.join(dir, ".cliguard", "cli-b", "contract.json"), "utf-8");
+        expect(aAfter).toContain("Build the project (v2)");
+        expect(bAfter).toBe(bBefore);
+      } finally {
+        cleanup();
+        changedA.cleanup();
+      }
+    });
+
+    it("accept <name> <path> --reason records the acceptance under that target's own accepted-breaks.json, not the unnamespaced one", () => {
+      const { dir, cleanup } = makeTempDir();
+      const brokenA = writeModifiedFixture((source) =>
+        source
+          .split("\n")
+          .filter((line) => !line.includes(".requiredOption("))
+          .join("\n"),
+      );
+      try {
+        writeTargetsConfig(dir, FIXTURE, FIXTURE);
+        runCli(dir, ["init"]);
+        writeTargetsConfig(dir, brokenA.path, FIXTURE);
+
+        const changePath = "root -> build -> option[--target]";
+        const acceptResult = runCli(dir, ["accept", "cli-a", changePath, "--reason", "intentional"]);
+        expect(acceptResult.status).toBe(0);
+        expect(
+          existsSync(path.join(dir, ".cliguard", "cli-a", "accepted-breaks.json")),
+        ).toBe(true);
+        expect(
+          existsSync(path.join(dir, ".cliguard", "accepted-breaks.json")),
+        ).toBe(false);
+
+        const { status, output } = runCli(dir, ["check", "cli-a"]);
+        expect(status).toBe(0);
+        expect(output).toContain("🟣");
+      } finally {
+        cleanup();
+        brokenA.cleanup();
+      }
+    });
+
+    it("an explicit literal entry path keeps working exactly as the classic single-CLI flow, even with targets configured - config is only consulted when entry is omitted or matches a target's name", () => {
+      const { dir, cleanup } = makeTempDir();
+      try {
+        writeTargetsConfig(dir, FIXTURE, FIXTURE);
+
+        const { status, output } = runCli(dir, ["init", FIXTURE]);
+        expect(status).toBe(0);
+        expect(output).not.toContain("==");
+        expect(existsSync(path.join(dir, ".cliguard", "contract.json"))).toBe(true);
+        expect(existsSync(path.join(dir, ".cliguard", "cli-a"))).toBe(false);
+      } finally {
+        cleanup();
+      }
+    });
+  });
+
   it("a real [unstable]-marked option's removal reports as PATCH, not BREAKING", () => {
     const { dir, cleanup } = makeTempDir();
     // Marks --verbose unstable at the point it's declared, in the target

@@ -17,6 +17,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   committed docs file and exits `1` if it's stale, same spirit as `check`
   itself. Also exported from the programmatic API as `renderMarkdownDocs`.
   Closes #6.
+- `cliguard.config.js` gains `targets: [{ name, entry, adapter? }, ...]`
+  for monorepos with more than one CLI entry point. `init`/`check`/
+  `update`/`accept` all pick it up: omit the entry argument to run every
+  configured target, or pass a target's `name` in its place to run just
+  one. Each target's contract/accepted-breaks/deprecations live under
+  their own `.cliguard/<name>/` directory. Purely additive - an explicit
+  file-path entry keeps working exactly as it always has, config or not.
+  Closes #7.
 
 ## [0.7.1] - 2026-09-01
 

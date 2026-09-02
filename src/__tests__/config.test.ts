@@ -2,7 +2,13 @@ import { mkdtempSync, rmSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import path from "path";
 
-import { applyConfig, configExists, loadConfig, type CliguardConfig } from "../core/config";
+import {
+  applyConfig,
+  configExists,
+  loadConfig,
+  resolveTargets,
+  type CliguardConfig,
+} from "../core/config";
 import type { DiffResult } from "../core/diff.engine";
 import { ChangeType } from "../core/types";
 
@@ -149,5 +155,84 @@ describe("loadConfig / configExists", () => {
 
       expect(() => loadConfig()).toThrow("must export an object");
     });
+  });
+
+  it("loads a real targets array off disk", () => {
+    withTempDir((dir) => {
+      writeFileSync(
+        path.join(dir, "cliguard.config.js"),
+        'module.exports = { targets: [{ name: "a", entry: "bin/a.js" }] };\n',
+      );
+
+      expect(loadConfig()).toEqual({ targets: [{ name: "a", entry: "bin/a.js" }] });
+    });
+  });
+
+  it("throws a clear error when a targets entry is missing name or entry", () => {
+    withTempDir((dir) => {
+      writeFileSync(
+        path.join(dir, "cliguard.config.js"),
+        'module.exports = { targets: [{ name: "a" }] };\n',
+      );
+
+      expect(() => loadConfig()).toThrow('"targets" entries must look like');
+    });
+  });
+
+  it("throws a clear error when two targets share the same name", () => {
+    withTempDir((dir) => {
+      writeFileSync(
+        path.join(dir, "cliguard.config.js"),
+        'module.exports = { targets: [{ name: "a", entry: "x.js" }, { name: "a", entry: "y.js" }] };\n',
+      );
+
+      expect(() => loadConfig()).toThrow('more than one entry named "a"');
+    });
+  });
+});
+
+describe("resolveTargets", () => {
+  const config: CliguardConfig = {
+    targets: [
+      { name: "cli-a", entry: "packages/cli-a/bin/index.js", adapter: "yargs" },
+      { name: "cli-b", entry: "packages/cli-b/bin/index.js" },
+    ],
+  };
+
+  it("treats an explicit entry that matches no target's name as a literal file path - today's behavior, unaffected by config", () => {
+    expect(resolveTargets("./bin/cli.js", config, "commander")).toEqual([
+      { namespace: null, entry: "./bin/cli.js", adapter: "commander" },
+    ]);
+  });
+
+  it("treats an explicit entry as a literal path even when targets is configured but empty/absent - a project with no targets is completely unaffected", () => {
+    expect(resolveTargets("./bin/cli.js", {}, "commander")).toEqual([
+      { namespace: null, entry: "./bin/cli.js", adapter: "commander" },
+    ]);
+  });
+
+  it("resolves a single named target when the entry matches a configured target's name, using that target's own adapter", () => {
+    expect(resolveTargets("cli-a", config, "commander")).toEqual([
+      { namespace: "cli-a", entry: "packages/cli-a/bin/index.js", adapter: "yargs" },
+    ]);
+  });
+
+  it("defaults a matched target's adapter to commander when the target doesn't specify one", () => {
+    expect(resolveTargets("cli-b", config, "commander")).toEqual([
+      { namespace: "cli-b", entry: "packages/cli-b/bin/index.js", adapter: "commander" },
+    ]);
+  });
+
+  it("resolves every configured target when entry is omitted", () => {
+    expect(resolveTargets(undefined, config, "commander")).toEqual([
+      { namespace: "cli-a", entry: "packages/cli-a/bin/index.js", adapter: "yargs" },
+      { namespace: "cli-b", entry: "packages/cli-b/bin/index.js", adapter: "commander" },
+    ]);
+  });
+
+  it("throws when entry is omitted and no targets are configured - nothing to run", () => {
+    expect(() => resolveTargets(undefined, {}, "commander")).toThrow(
+      "no entry given and no targets configured",
+    );
   });
 });

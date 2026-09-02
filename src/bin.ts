@@ -3,7 +3,7 @@ import { Command } from "commander";
 import { basename, relative, resolve } from "path";
 
 import { adapters, resolveAdapter } from "./adapters/registry";
-import { applyConfig, loadConfig } from "./core/config";
+import { applyConfig, loadConfig, resolveTargets, type ResolvedTarget } from "./core/config";
 import { DiffEngine, type DiffResult } from "./core/diff.engine";
 import { renderMarkdownDocs } from "./core/docs";
 import { toGitLabCodeQuality, toJUnitXml, toRdjsonl } from "./core/report-formats";
@@ -54,6 +54,42 @@ const adapterOption = [
   "commander",
 ] as const;
 
+const ENTRY_ARGUMENT_DESCRIPTION =
+  "path to the target CLI's entry file, or a configured cliguard.config.js target's name - " +
+  "omit to run every configured target (see cliguard.config.js's targets)";
+
+/** Shared by init/check/update/accept: resolves what to run against, or prints resolveTargets's own error and exits 1 - identical failure shape across all four. */
+function resolveTargetsOrExit(entry: string | undefined, cliAdapter: string): ResolvedTarget[] {
+  try {
+    return resolveTargets(entry, loadConfig(), cliAdapter);
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exit(1);
+  }
+}
+
+/**
+ * Runs `action` once per resolved target, printing a `== <name> ==` banner
+ * between them only when there's more than one - a single classic target
+ * (the common case: no cliguard.config.js, or one that matched no target
+ * name) prints exactly as it always has, with no banner at all. The
+ * overall exit code is 1 if ANY target's own action returned non-zero,
+ * matching `check`'s existing "any BREAKING change fails the build"
+ * semantics extended across targets instead of options/arguments.
+ */
+async function runAcrossTargets(
+  targets: readonly ResolvedTarget[],
+  action: (target: ResolvedTarget) => Promise<number>,
+): Promise<number> {
+  let exitCode = 0;
+  for (const target of targets) {
+    if (targets.length > 1) console.log(`\n== ${target.namespace} ==`);
+    const code = await action(target);
+    if (code !== 0) exitCode = 1;
+  }
+  return exitCode;
+}
+
 const REPORT_FORMATS = ["text", "json", "junit", "gitlab-codequality", "rdjsonl"] as const;
 type ReportFormat = (typeof REPORT_FORMATS)[number];
 
@@ -87,43 +123,58 @@ function formatReport(
 program
   .command("init")
   .description("Capture the current CLI surface as the committed contract")
-  .argument("<entry>", "path to the target CLI's entry file")
+  .argument("[entry]", ENTRY_ARGUMENT_DESCRIPTION)
   .option(...adapterOption)
   .option(
     "--with-ci",
     "also scaffold a GitHub Actions workflow that runs cliguard on every pull request",
     false,
   )
-  .action(async (entry: string, options: { adapter: string; withCi: boolean }) => {
-    if (contractExists()) {
-      console.warn(`A contract already exists. Run "cliguard update" to overwrite it.`);
+  .action(async (entry: string | undefined, options: { adapter: string; withCi: boolean }) => {
+    const targets = resolveTargetsOrExit(entry, options.adapter);
+    if (options.withCi && targets.length > 1) {
+      console.error(
+        "cliguard: --with-ci supports a single target at a time - run " +
+          "`cliguard init <name> --with-ci` for one target, or write the workflow by hand " +
+          "for a multi-target project.",
+      );
       process.exit(1);
     }
 
-    const exitCode = await withSuppressedExit(async () => {
-      const contract = await resolveAdapter(options.adapter).extract(entry);
-      writeContract(contract);
-      console.log(`✅ CLI contract initialized successfully at ${getContractDisplayPath()}.`);
-
-      if (options.withCi) {
-        if (ciWorkflowExists()) {
-          console.log(`ℹ️  ${getCiWorkflowDisplayPath()} already exists - left it untouched.`);
-        } else {
-          const entryPath = relative(process.cwd(), resolve(entry)).split("\\").join("/");
-          writeCiWorkflow(buildCiWorkflowYaml(entryPath, options.adapter));
-          console.log(`✅ GitHub Actions workflow scaffolded at ${getCiWorkflowDisplayPath()}.`);
+    const exitCode = await runAcrossTargets(targets, (target) =>
+      withSuppressedExit(async () => {
+        if (contractExists(target.namespace)) {
+          const suffix = target.namespace ? ` ${target.namespace}` : "";
+          console.warn(`A contract already exists. Run "cliguard update${suffix}" to overwrite it.`);
+          return 1;
         }
-      }
 
-      return 0;
-    });
+        const contract = await resolveAdapter(target.adapter).extract(target.entry);
+        writeContract(contract, target.namespace);
+        console.log(
+          `✅ CLI contract initialized successfully at ${getContractDisplayPath(target.namespace)}.`,
+        );
+
+        if (options.withCi) {
+          if (ciWorkflowExists()) {
+            console.log(`ℹ️  ${getCiWorkflowDisplayPath()} already exists - left it untouched.`);
+          } else {
+            const entryPath = relative(process.cwd(), resolve(target.entry)).split("\\").join("/");
+            writeCiWorkflow(buildCiWorkflowYaml(entryPath, target.adapter));
+            console.log(`✅ GitHub Actions workflow scaffolded at ${getCiWorkflowDisplayPath()}.`);
+          }
+        }
+
+        return 0;
+      }),
+    );
     process.exit(exitCode);
   });
 
 program
   .command("check")
   .description("Compare the current CLI surface against the committed contract")
-  .argument("<entry>", "path to the target CLI's entry file")
+  .argument("[entry]", ENTRY_ARGUMENT_DESCRIPTION)
   .option(...adapterOption)
   .option(
     "--json",
@@ -142,7 +193,7 @@ program
   )
   .action(
     async (
-      entry: string,
+      entry: string | undefined,
       options: {
         adapter: string;
         json: boolean;
@@ -151,46 +202,54 @@ program
         strict: boolean;
       },
     ) => {
-      const exitCode = await withSuppressedExit(async () => {
-        const format = resolveFormat(options.format, options.json);
-        if (!format) {
-          console.error(
-            `cliguard: unknown --format "${options.format}". Use ${REPORT_FORMATS.join(", ")}.`,
-          );
-          return 1;
-        }
+      const targets = resolveTargetsOrExit(entry, options.adapter);
 
-        const oldContract = options.against ? readContractAtRef(options.against) : readContract();
-        const newContract = await resolveAdapter(options.adapter).extract(entry);
-        const diff = applyDeprecations(
-          diffEngine.applyUnstableMarkers(
-            applyConfig(
-              diffEngine.compare(oldContract, newContract, { strict: options.strict }),
-              loadConfig(),
+      const exitCode = await runAcrossTargets(targets, (target) =>
+        withSuppressedExit(async () => {
+          const format = resolveFormat(options.format, options.json);
+          if (!format) {
+            console.error(
+              `cliguard: unknown --format "${options.format}". Use ${REPORT_FORMATS.join(", ")}.`,
+            );
+            return 1;
+          }
+
+          const oldContract = options.against
+            ? readContractAtRef(options.against, target.namespace)
+            : readContract(target.namespace);
+          const newContract = await resolveAdapter(target.adapter).extract(target.entry);
+          const diff = applyDeprecations(
+            diffEngine.applyUnstableMarkers(
+              applyConfig(
+                diffEngine.compare(oldContract, newContract, { strict: options.strict }),
+                loadConfig(),
+              ),
+              oldContract,
+              newContract,
             ),
-            oldContract,
-            newContract,
-          ),
-          indexDeprecations(readDeprecations()),
-        );
-        const acceptedPaths = indexAcceptedBreaks(readAcceptedBreaks());
-        const hasBreaking = diff.some(
-          (change) => change.type === ChangeType.BREAKING && !acceptedPaths.has(change.path),
-        );
+            indexDeprecations(readDeprecations(target.namespace)),
+          );
+          const acceptedPaths = indexAcceptedBreaks(readAcceptedBreaks(target.namespace));
+          const hasBreaking = diff.some(
+            (change) => change.type === ChangeType.BREAKING && !acceptedPaths.has(change.path),
+          );
 
-        if (format !== "text") {
-          console.log(formatReport(diff, acceptedPaths, format, getContractDisplayPath()));
+          if (format !== "text") {
+            console.log(
+              formatReport(diff, acceptedPaths, format, getContractDisplayPath(target.namespace)),
+            );
+            return hasBreaking ? 1 : 0;
+          }
+
+          if (diff.length === 0) {
+            console.log("✅ CLI contract is intact.");
+            return 0;
+          }
+
+          printDiff(diff, acceptedPaths);
           return hasBreaking ? 1 : 0;
-        }
-
-        if (diff.length === 0) {
-          console.log("✅ CLI contract is intact.");
-          return 0;
-        }
-
-        printDiff(diff, acceptedPaths);
-        return hasBreaking ? 1 : 0;
-      });
+        }),
+      );
       process.exit(exitCode);
     },
   );
@@ -200,7 +259,12 @@ program
   .description(
     "Record that a specific BREAKING change is intentional, so `check` stops failing CI for it",
   )
-  .argument("<entry>", "path to the target CLI's entry file")
+  .argument(
+    "<entry>",
+    "path to the target CLI's entry file, or a configured cliguard.config.js target's name - " +
+      "always required here (unlike check/init/update): accepting a change is inherently a " +
+      "one-target operation, so there's no sensible \"omit to run every target\" mode",
+  )
   .argument(
     "<changePath>",
     'the exact DiffResult path to accept, e.g. "root -> build -> option[--target]"',
@@ -218,58 +282,66 @@ program
       changePath: string,
       options: { reason: string; adapter: string; strict: boolean },
     ) => {
-      const exitCode = await withSuppressedExit(async () => {
-        const reason = options.reason.trim();
-        if (!reason) {
-          console.error(
-            "cliguard: --reason can't be blank - it's the audit trail for why this break is OK.",
-          );
-          return 1;
-        }
+      const targets = resolveTargetsOrExit(entry, options.adapter);
 
-        const oldContract = readContract();
-        const newContract = await resolveAdapter(options.adapter).extract(entry);
-        const diff = applyDeprecations(
-          diffEngine.applyUnstableMarkers(
-            applyConfig(
-              diffEngine.compare(oldContract, newContract, { strict: options.strict }),
-              loadConfig(),
+      const exitCode = await runAcrossTargets(targets, (target) =>
+        withSuppressedExit(async () => {
+          const reason = options.reason.trim();
+          if (!reason) {
+            console.error(
+              "cliguard: --reason can't be blank - it's the audit trail for why this break is OK.",
+            );
+            return 1;
+          }
+
+          const oldContract = readContract(target.namespace);
+          const newContract = await resolveAdapter(target.adapter).extract(target.entry);
+          const diff = applyDeprecations(
+            diffEngine.applyUnstableMarkers(
+              applyConfig(
+                diffEngine.compare(oldContract, newContract, { strict: options.strict }),
+                loadConfig(),
+              ),
+              oldContract,
+              newContract,
             ),
-            oldContract,
-            newContract,
-          ),
-          indexDeprecations(readDeprecations()),
-        );
-        const match = diff.find(
-          (change) => change.type === ChangeType.BREAKING && change.path === changePath,
-        );
-
-        if (!match) {
-          const breaking = diff.filter((change) => change.type === ChangeType.BREAKING);
-          console.error(
-            `cliguard: no current BREAKING change at path "${changePath}".` +
-              (breaking.length === 0
-                ? " There are no BREAKING changes right now - nothing to accept."
-                : ` Currently breaking:\n${breaking.map((change) => `  - ${change.path}`).join("\n")}`),
+            indexDeprecations(readDeprecations(target.namespace)),
           );
-          return 1;
-        }
+          const match = diff.find(
+            (change) => change.type === ChangeType.BREAKING && change.path === changePath,
+          );
 
-        // Replaces any earlier acceptance at the same path rather than
-        // accumulating duplicates - re-running `accept` updates the reason.
-        const remaining = readAcceptedBreaks().filter((accepted) => accepted.path !== changePath);
-        const accepted: AcceptedBreak = {
-          path: changePath,
-          reason,
-          acceptedAt: new Date().toISOString(),
-        };
-        writeAcceptedBreaks([...remaining, accepted]);
+          if (!match) {
+            const breaking = diff.filter((change) => change.type === ChangeType.BREAKING);
+            console.error(
+              `cliguard: no current BREAKING change at path "${changePath}".` +
+                (breaking.length === 0
+                  ? " There are no BREAKING changes right now - nothing to accept."
+                  : ` Currently breaking:\n${breaking.map((change) => `  - ${change.path}`).join("\n")}`),
+            );
+            return 1;
+          }
 
-        console.log(`✅ Accepted: [${changePath}] ${match.message}`);
-        console.log(`   Reason: ${reason}`);
-        console.log(`   Recorded in ${getAcceptedBreaksDisplayPath()} - commit this file.`);
-        return 0;
-      });
+          // Replaces any earlier acceptance at the same path rather than
+          // accumulating duplicates - re-running `accept` updates the reason.
+          const remaining = readAcceptedBreaks(target.namespace).filter(
+            (accepted) => accepted.path !== changePath,
+          );
+          const accepted: AcceptedBreak = {
+            path: changePath,
+            reason,
+            acceptedAt: new Date().toISOString(),
+          };
+          writeAcceptedBreaks([...remaining, accepted], target.namespace);
+
+          console.log(`✅ Accepted: [${changePath}] ${match.message}`);
+          console.log(`   Reason: ${reason}`);
+          console.log(
+            `   Recorded in ${getAcceptedBreaksDisplayPath(target.namespace)} - commit this file.`,
+          );
+          return 0;
+        }),
+      );
       process.exit(exitCode);
     },
   );
@@ -336,15 +408,19 @@ program
 program
   .command("update")
   .description("Overwrite the committed contract with the CLI's current surface")
-  .argument("<entry>", "path to the target CLI's entry file")
+  .argument("[entry]", ENTRY_ARGUMENT_DESCRIPTION)
   .option(...adapterOption)
-  .action(async (entry: string, options: { adapter: string }) => {
-    const exitCode = await withSuppressedExit(async () => {
-      const contract = await resolveAdapter(options.adapter).extract(entry);
-      writeContract(contract);
-      console.log("🔄 CLI contract updated successfully.");
-      return 0;
-    });
+  .action(async (entry: string | undefined, options: { adapter: string }) => {
+    const targets = resolveTargetsOrExit(entry, options.adapter);
+
+    const exitCode = await runAcrossTargets(targets, (target) =>
+      withSuppressedExit(async () => {
+        const contract = await resolveAdapter(target.adapter).extract(target.entry);
+        writeContract(contract, target.namespace);
+        console.log("🔄 CLI contract updated successfully.");
+        return 0;
+      }),
+    );
     process.exit(exitCode);
   });
 

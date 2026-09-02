@@ -121,3 +121,93 @@ describe("storage", () => {
     );
   });
 });
+
+// #7: a config-resolved target's own `name` namespaces every .cliguard/*
+// path under .cliguard/<name>/ instead of .cliguard/ directly - covers the
+// contract, accepted-breaks, and deprecations trio, since all three share
+// the same targetPath() helper internally.
+describe("storage - namespaced targets (monorepo support)", () => {
+  let dir: string;
+
+  beforeEach(() => {
+    dir = mkdtempSync(path.join(tmpdir(), "cliguard-storage-ns-test-"));
+  });
+
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("a null namespace writes/reads exactly the unnamespaced path, unchanged from before this feature existed", () => {
+    withFreshStorage(dir, (storage) => storage.writeContract(SAMPLE_CONTRACT, null));
+
+    expect(existsSync(path.join(dir, ".cliguard", "contract.json"))).toBe(true);
+    expect(existsSync(path.join(dir, ".cliguard", "null"))).toBe(false);
+  });
+
+  it("a named namespace writes to .cliguard/<name>/contract.json", () => {
+    withFreshStorage(dir, (storage) => storage.writeContract(SAMPLE_CONTRACT, "cli-a"));
+
+    const written = path.join(dir, ".cliguard", "cli-a", "contract.json");
+    expect(existsSync(written)).toBe(true);
+    expect(JSON.parse(readFileSync(written, "utf-8"))).toEqual(SAMPLE_CONTRACT);
+  });
+
+  it("two named targets' contracts never collide - each reads back only its own", () => {
+    const otherContract = { ...SAMPLE_CONTRACT, root: { ...SAMPLE_CONTRACT.root, name: "othercli" } };
+
+    const [a, b] = withFreshStorage(dir, (storage) => {
+      storage.writeContract(SAMPLE_CONTRACT, "cli-a");
+      storage.writeContract(otherContract, "cli-b");
+      return [storage.readContract("cli-a"), storage.readContract("cli-b")];
+    });
+
+    expect(a).toEqual(SAMPLE_CONTRACT);
+    expect(b).toEqual(otherContract);
+  });
+
+  it("contractExists is scoped per namespace - writing cli-a doesn't make cli-b (or the unnamespaced path) exist", () => {
+    const result = withFreshStorage(dir, (storage) => {
+      storage.writeContract(SAMPLE_CONTRACT, "cli-a");
+      return {
+        a: storage.contractExists("cli-a"),
+        b: storage.contractExists("cli-b"),
+        unnamespaced: storage.contractExists(null),
+      };
+    });
+
+    expect(result).toEqual({ a: true, b: false, unnamespaced: false });
+  });
+
+  it("getContractDisplayPath names the namespaced path so an error message can point at the right one", () => {
+    const result = withFreshStorage(dir, (storage) => storage.getContractDisplayPath("cli-a"));
+    expect(result).toBe(".cliguard/cli-a/contract.json");
+  });
+
+  it("accepted-breaks and deprecations are namespaced the same way as the contract", () => {
+    const result = withFreshStorage(dir, (storage) => {
+      storage.writeAcceptedBreaks(
+        [{ path: "root -> option[--x]", reason: "intentional", acceptedAt: "2026-01-01T00:00:00.000Z" }],
+        "cli-a",
+      );
+      storage.writeDeprecations(
+        [{ path: "root -> option[--y]", removeBy: "2.0.0", deprecatedAt: "2026-01-01T00:00:00.000Z" }],
+        "cli-a",
+      );
+      return {
+        acceptedA: storage.readAcceptedBreaks("cli-a"),
+        acceptedUnnamespaced: storage.readAcceptedBreaks(null),
+        deprecatedA: storage.readDeprecations("cli-a"),
+      };
+    });
+
+    expect(result.acceptedA).toHaveLength(1);
+    expect(result.acceptedUnnamespaced).toEqual([]);
+    expect(result.deprecatedA).toHaveLength(1);
+    expect(
+      existsSync(path.join(dir, ".cliguard", "cli-a", "accepted-breaks.json")),
+    ).toBe(true);
+    expect(
+      existsSync(path.join(dir, ".cliguard", "cli-a", "deprecations.json")),
+    ).toBe(true);
+  });
+});

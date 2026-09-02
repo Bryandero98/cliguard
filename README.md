@@ -155,6 +155,35 @@ module.exports = {
 
 `pattern` in either field is a `RegExp` or a glob string (`*` matches any run of characters) matched against a change's path (the same string `check`'s own output shows, e.g. `"root -> build -> option[--target]"`). Applied before `accept`/`deprecate` ever run, so a change this config already downgraded has nothing left for either of those to act on. No `cliguard.config.js` present is a no-op - every project behaves exactly as it always has.
 
+### Monorepos with multiple CLI entry points
+
+A monorepo shipping more than one CLI - a `packages/*` layout where two or three packages each have their own `bin` - doesn't need N separate `.cliguard/` directories and N hand-written CI steps. Declare every entry point once, as `targets` in `cliguard.config.js`:
+
+```js
+// cliguard.config.js
+module.exports = {
+  targets: [
+    { name: "cli-a", entry: "packages/cli-a/bin/index.js", adapter: "commander" },
+    { name: "cli-b", entry: "packages/cli-b/bin/index.js", adapter: "yargs" },
+  ],
+};
+```
+
+`init`/`check`/`update`/`accept` all pick it up - omit the entry argument to run against every configured target, or pass a target's `name` in its place to run just that one:
+
+```sh
+npx cliguard init            # initializes every target: .cliguard/cli-a/contract.json, .cliguard/cli-b/contract.json, ...
+npx cliguard check           # checks every target - exits 1 if ANY of them has an unacknowledged breaking change
+npx cliguard check cli-a     # just one, by name
+npx cliguard accept cli-a "root -> build -> option[--target]" --reason "..."  # accept is always single-target - see below
+```
+
+Each target's contract, accepted breaks, and deprecations live under their own `.cliguard/<name>/` directory, so two targets never collide on disk. Running more than one target at once prints a `== <name> ==` banner between them; checking a single named target (or the classic single-CLI flow below) prints exactly as it always has, with no banner at all.
+
+**This is additive, not a replacement for the single-CLI flow that's still most of cliguard's actual usage.** An explicit file-path entry (`npx cliguard check ./bin/cli.js`) keeps working exactly as it does today, `cliguard.config.js` or not - `targets` is only ever consulted when the entry argument is omitted, or when it exactly matches a configured target's `name`.
+
+`accept` is the one exception to "omit entry to run every target": accepting a specific breaking change is inherently a one-target operation (a `changePath` on one CLI's contract has nothing to do with another CLI's), so its entry argument stays required - a literal path or a target's `name`, same as `check`.
+
 ### Comparing against a git ref instead of a local file
 
 `check` normally diffs against `.cliguard/contract.json` on disk, but a CI runner checking out a PR branch often doesn't have a freshly-updated one - `--against <ref>` reads the contract straight out of git instead, no local file required:
