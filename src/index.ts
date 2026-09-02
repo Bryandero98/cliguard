@@ -12,6 +12,7 @@ import type { Contract } from "./core/types";
 
 export type { CliAdapter } from "./adapters/adapter.interface";
 export { CacAdapter } from "./adapters/cac.adapter";
+export { ClickAdapter } from "./adapters/click.adapter";
 export { CommanderAdapter } from "./adapters/commander.adapter";
 export { YargsAdapter } from "./adapters/yargs.adapter";
 export { adapters, resolveAdapter } from "./adapters/registry";
@@ -69,7 +70,7 @@ export function compareContracts(
   return diffEngine.compare(oldContract, newContract, options);
 }
 
-/** Every adapter name `extractContract`/the CLI's `--adapter` flag will accept, e.g. ["commander", "cac", "yargs"]. */
+/** Every adapter name `extractContract`/the CLI's `--adapter` flag will accept, e.g. ["commander", "cac", "yargs", "click"]. */
 export function listAdapters(): string[] {
   return Object.keys(adapters);
 }

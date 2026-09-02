@@ -1442,3 +1442,74 @@ describe("cliguard CLI (subprocess)", () => {
     }
   });
 });
+
+// The click adapter is the odd one out: it spawns a real Python
+// interpreter as a subprocess instead of loading the target in-process,
+// so its own real-subprocess behavior is worth covering at the CLI level
+// too, not just via ClickAdapter unit tests - proves init/check/the diff
+// engine all agree with the adapter end to end, exactly like every other
+// framework already gets covered above.
+describe("click adapter (init/check through the real CLI)", () => {
+  const CLICK_FIXTURE = path.join(__dirname, "..", "__fixtures__", "basic-click-cli.py");
+
+  it("init + check round-trip cleanly for an unchanged Click CLI", () => {
+    const { dir, cleanup } = makeTempDir();
+    try {
+      expect(runCli(dir, ["init", CLICK_FIXTURE, "--adapter", "click"]).status).toBe(0);
+      const { status, output } = runCli(dir, ["check", CLICK_FIXTURE, "--adapter", "click"]);
+      expect(status).toBe(0);
+      expect(output).toContain("CLI contract is intact.");
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("check reports a real BREAKING change (a removed required option) from a modified Click CLI", () => {
+    const { dir, cleanup } = makeTempDir();
+    const scratchDir = mkdtempSync(path.join(SCRATCH_ROOT, "click-fixture-"));
+    const modifiedPath = path.join(scratchDir, "modified-click-cli.py");
+    try {
+      const modified = readFileSync(CLICK_FIXTURE, "utf8")
+        .split("\n")
+        .filter((line) => !line.includes('@click.option("--output"'))
+        .join("\n");
+      writeFileSync(modifiedPath, modified);
+
+      runCli(dir, ["init", CLICK_FIXTURE, "--adapter", "click"]);
+      const { status, output } = runCli(dir, ["check", modifiedPath, "--adapter", "click"]);
+
+      expect(status).toBe(1);
+      expect(output).toContain("🔴");
+      expect(output).toContain("--output");
+    } finally {
+      cleanup();
+      rmSync(scratchDir, { recursive: true, force: true });
+    }
+  });
+
+  it("init --with-ci writes an explicit adapter: click line", () => {
+    const { dir, cleanup } = makeTempDir();
+    try {
+      runCli(dir, ["init", CLICK_FIXTURE, "--with-ci", "--adapter", "click"]);
+      const workflow = readFileSync(
+        path.join(dir, ".github", "workflows", "cliguard.yml"),
+        "utf8",
+      );
+      expect(workflow).toContain("adapter: click");
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("surfaces the extractor's own clear error, through the real CLI, when the target has no Click command", () => {
+    const { dir, cleanup } = makeTempDir();
+    const notAClick = path.join(__dirname, "..", "__fixtures__", "not-a-click-cli.py");
+    try {
+      const { status, output } = runCli(dir, ["preview", notAClick, "--adapter", "click"]);
+      expect(status).toBe(1);
+      expect(output).toContain("no Click command found");
+    } finally {
+      cleanup();
+    }
+  });
+});

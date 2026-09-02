@@ -5,7 +5,7 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.7.2] - 2026-09-02
 
 ### Added
 
@@ -17,6 +17,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   committed docs file and exits `1` if it's stale, same spirit as `check`
   itself. Also exported from the programmatic API as `renderMarkdownDocs`.
   Closes #6.
+- Click (Python) adapter (`--adapter click`): points cliguard at a `.py`
+  file defining a Click command/group. Unlike every other adapter, this
+  one can't introspect the target in-process (a Python object graph is
+  unreachable from Node) - it shells out to `python3`/`python` with a
+  small extractor script that reads Click's own `.params`/`.commands`
+  object model and prints the contract as JSON, the same "never parse
+  `--help` text" guarantee every other adapter already gives. Requires
+  Python 3 with `click` installed in whichever environment cliguard's
+  shell resolves `python3`/`python` to. Closes the Click portion of #8;
+  Cobra (Go) and Clap (Rust) need each target CLI to expose its own
+  command tree via a small companion package rather than cliguard
+  reading it from outside, a bigger piece of design tracked separately
+  in #9 (Cobra) and #10 (Clap).
 - `cliguard.config.js` gains `targets: [{ name, entry, adapter? }, ...]`
   for monorepos with more than one CLI entry point. `init`/`check`/
   `update`/`accept` all pick it up: omit the entry argument to run every
@@ -213,6 +226,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - A corrupt `.cliguard/contract.json` now names the file and suggests the
   fix instead of a generic parse error.
 
+[0.7.2]: https://github.com/Bryandero98/cliguard/compare/v0.7.1...v0.7.2
 [0.7.1]: https://github.com/Bryandero98/cliguard/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/Bryandero98/cliguard/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/Bryandero98/cliguard/compare/v0.5.0...v0.6.0

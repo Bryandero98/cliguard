@@ -79,7 +79,7 @@ describe('programmatic API (require("cliguard"))', () => {
   });
 
   it("listAdapters reports every adapter the CLI's --adapter flag also accepts", () => {
-    expect(cliguard.listAdapters().sort()).toEqual(["cac", "commander", "yargs"]);
+    expect(cliguard.listAdapters().sort()).toEqual(["cac", "click", "commander", "yargs"]);
   });
 
   it("toJUnitXml is usable directly against compareContracts's own output", async () => {

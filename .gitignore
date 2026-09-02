@@ -3,3 +3,4 @@ dist
 .e2e-scratch
 *.log
 .cliguard
+__pycache__

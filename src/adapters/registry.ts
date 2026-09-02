@@ -1,5 +1,6 @@
 import type { CliAdapter } from "./adapter.interface";
 import { CacAdapter } from "./cac.adapter";
+import { ClickAdapter } from "./click.adapter";
 import { CommanderAdapter } from "./commander.adapter";
 import { YargsAdapter } from "./yargs.adapter";
 
@@ -14,6 +15,7 @@ export const adapters: Readonly<Record<string, CliAdapter>> = {
   commander: new CommanderAdapter(),
   cac: new CacAdapter(),
   yargs: new YargsAdapter(),
+  click: new ClickAdapter(),
 };
 
 export function resolveAdapter(name: string): CliAdapter {

@@ -81,6 +81,28 @@ npx cliguard init ./bin/cli.js --adapter yargs
 
 Like `cac`, `yargs` itself is an optional dependency of cliguard - only installed if you actually use `--adapter yargs`.
 
+Built with Python's [Click](https://click.palletsprojects.com/) instead of a JS framework? Point cliguard straight at the `.py` file that defines your root command or group - no export needed, since Click's own `@click.command()`/`@click.group()` decorators already bind it as a module-level name:
+
+```py
+# cli.py
+import click
+
+@click.group()
+def cli():
+    pass
+
+@cli.command()
+@click.option("--target", "-t", required=True, help="build target")
+def build(target):
+    ...
+```
+
+```sh
+npx cliguard init ./cli.py --adapter click
+```
+
+Unlike the JS adapters, `click` needs a real Python interpreter: cliguard shells out to `python3` (falling back to `python`) with `click` installed in that same environment - there's no in-process way to introspect a Python object from Node. `pip install click` in whichever Python cliguard's shell can already reach is all that's required; nothing npm-installable covers this one.
+
 ### Entry files that build the CLI lazily
 
 Not every real CLI exports its instance - plenty build it inside a function that only runs when something actually calls it, or just never had a reason to export it. Pointing cliguard straight at a file like that would fail with "no instance found" under the rule above alone.
