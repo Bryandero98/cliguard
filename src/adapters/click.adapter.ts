@@ -180,8 +180,8 @@ export class ClickAdapter implements CliAdapter {
   readonly id = "click";
   readonly limitations: readonly string[] = [
     "CommandContract.aliases is always [] - Click's base Group/Command has no built-in alias concept (unlike Commander's .alias()).",
-    "ArgumentContract.description is always \"\" - Click's click.Argument carries no help/description field, only click.Option does.",
-    "OptionContract.valueType collapses every non-flag Click option (string, int, float, choice, path, ...) to \"string\" - Contract only distinguishes boolean vs. everything else, matching how CacAdapter/YargsAdapter already collapse their own richer type systems.",
+    'ArgumentContract.description is always "" - Click\'s click.Argument carries no help/description field, only click.Option does.',
+    'OptionContract.valueType collapses every non-flag Click option (string, int, float, choice, path, ...) to "string" - Contract only distinguishes boolean vs. everything else, matching how CacAdapter/YargsAdapter already collapse their own richer type systems.',
     "A --flag/--no-flag paired boolean toggle surfaces as one OptionContract, same as a plain is_flag option - the negative form is only visible informationally inside `flags`, not as a separate field.",
     "Requires a `python3` or `python` on PATH with `click` installed in that same environment - unlike the JS adapters, which only need the target's own node_modules.",
   ];
@@ -242,12 +242,19 @@ export class ClickAdapter implements CliAdapter {
       description: json.help ?? json.short_help ?? "",
       aliases: [],
       options: json.params
-        .filter((param): param is ClickParamJson & { readonly type: "Option" } => param.type === "Option")
+        .filter(
+          (param): param is ClickParamJson & { readonly type: "Option" } => param.type === "Option",
+        )
         .map((param) => this.mapOption(param)),
       arguments: json.params
-        .filter((param): param is ClickParamJson & { readonly type: "Argument" } => param.type === "Argument")
+        .filter(
+          (param): param is ClickParamJson & { readonly type: "Argument" } =>
+            param.type === "Argument",
+        )
         .map((param) => this.mapArgument(param)),
-      subcommands: json.commands ? Object.values(json.commands).map((sub) => this.mapCommand(sub)) : [],
+      subcommands: json.commands
+        ? Object.values(json.commands).map((sub) => this.mapCommand(sub))
+        : [],
     };
   }
 

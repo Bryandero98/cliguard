@@ -27,7 +27,9 @@ export function getContractDisplayPath(namespace: string | null = null): string 
 
 /** Accepted-breaks path relative to cwd, normalized to forward slashes - display only, never used for I/O. */
 export function getAcceptedBreaksDisplayPath(namespace: string | null = null): string {
-  return relative(process.cwd(), targetPath(namespace, "accepted-breaks.json")).split("\\").join("/");
+  return relative(process.cwd(), targetPath(namespace, "accepted-breaks.json"))
+    .split("\\")
+    .join("/");
 }
 
 export function contractExists(namespace: string | null = null): boolean {
@@ -145,7 +147,10 @@ export function readAcceptedBreaks(namespace: string | null = null): AcceptedBre
   }
 }
 
-export function writeAcceptedBreaks(breaks: readonly AcceptedBreak[], namespace: string | null = null): void {
+export function writeAcceptedBreaks(
+  breaks: readonly AcceptedBreak[],
+  namespace: string | null = null,
+): void {
   const acceptedBreaksPath = targetPath(namespace, "accepted-breaks.json");
   mkdirSync(dirname(acceptedBreaksPath), { recursive: true });
   writeFileSync(acceptedBreaksPath, JSON.stringify(breaks, null, 2) + "\n", "utf-8");
@@ -173,7 +178,10 @@ export function readDeprecations(namespace: string | null = null): Deprecation[]
   }
 }
 
-export function writeDeprecations(deprecations: readonly Deprecation[], namespace: string | null = null): void {
+export function writeDeprecations(
+  deprecations: readonly Deprecation[],
+  namespace: string | null = null,
+): void {
   const deprecationsPath = targetPath(namespace, "deprecations.json");
   mkdirSync(dirname(deprecationsPath), { recursive: true });
   writeFileSync(deprecationsPath, JSON.stringify(deprecations, null, 2) + "\n", "utf-8");

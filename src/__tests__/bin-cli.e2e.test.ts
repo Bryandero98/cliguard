@@ -1308,12 +1308,18 @@ describe("cliguard CLI (subprocess)", () => {
     it("update <name> overwrites only that one target's contract, leaving the other target's contract untouched", () => {
       const { dir, cleanup } = makeTempDir();
       const changedA = writeModifiedFixture((source) =>
-        source.replace('.description("Build the project")', '.description("Build the project (v2)")'),
+        source.replace(
+          '.description("Build the project")',
+          '.description("Build the project (v2)")',
+        ),
       );
       try {
         writeTargetsConfig(dir, FIXTURE, FIXTURE);
         runCli(dir, ["init"]);
-        const bBefore = readFileSync(path.join(dir, ".cliguard", "cli-b", "contract.json"), "utf-8");
+        const bBefore = readFileSync(
+          path.join(dir, ".cliguard", "cli-b", "contract.json"),
+          "utf-8",
+        );
 
         writeTargetsConfig(dir, changedA.path, FIXTURE);
         const { status } = runCli(dir, ["update", "cli-a"]);
@@ -1343,14 +1349,16 @@ describe("cliguard CLI (subprocess)", () => {
         writeTargetsConfig(dir, brokenA.path, FIXTURE);
 
         const changePath = "root -> build -> option[--target]";
-        const acceptResult = runCli(dir, ["accept", "cli-a", changePath, "--reason", "intentional"]);
+        const acceptResult = runCli(dir, [
+          "accept",
+          "cli-a",
+          changePath,
+          "--reason",
+          "intentional",
+        ]);
         expect(acceptResult.status).toBe(0);
-        expect(
-          existsSync(path.join(dir, ".cliguard", "cli-a", "accepted-breaks.json")),
-        ).toBe(true);
-        expect(
-          existsSync(path.join(dir, ".cliguard", "accepted-breaks.json")),
-        ).toBe(false);
+        expect(existsSync(path.join(dir, ".cliguard", "cli-a", "accepted-breaks.json"))).toBe(true);
+        expect(existsSync(path.join(dir, ".cliguard", "accepted-breaks.json"))).toBe(false);
 
         const { status, output } = runCli(dir, ["check", "cli-a"]);
         expect(status).toBe(0);
@@ -1491,10 +1499,7 @@ describe("click adapter (init/check through the real CLI)", () => {
     const { dir, cleanup } = makeTempDir();
     try {
       runCli(dir, ["init", CLICK_FIXTURE, "--with-ci", "--adapter", "click"]);
-      const workflow = readFileSync(
-        path.join(dir, ".github", "workflows", "cliguard.yml"),
-        "utf8",
-      );
+      const workflow = readFileSync(path.join(dir, ".github", "workflows", "cliguard.yml"), "utf8");
       expect(workflow).toContain("adapter: click");
     } finally {
       cleanup();

@@ -153,7 +153,10 @@ describe("storage - namespaced targets (monorepo support)", () => {
   });
 
   it("two named targets' contracts never collide - each reads back only its own", () => {
-    const otherContract = { ...SAMPLE_CONTRACT, root: { ...SAMPLE_CONTRACT.root, name: "othercli" } };
+    const otherContract = {
+      ...SAMPLE_CONTRACT,
+      root: { ...SAMPLE_CONTRACT.root, name: "othercli" },
+    };
 
     const [a, b] = withFreshStorage(dir, (storage) => {
       storage.writeContract(SAMPLE_CONTRACT, "cli-a");
@@ -186,11 +189,23 @@ describe("storage - namespaced targets (monorepo support)", () => {
   it("accepted-breaks and deprecations are namespaced the same way as the contract", () => {
     const result = withFreshStorage(dir, (storage) => {
       storage.writeAcceptedBreaks(
-        [{ path: "root -> option[--x]", reason: "intentional", acceptedAt: "2026-01-01T00:00:00.000Z" }],
+        [
+          {
+            path: "root -> option[--x]",
+            reason: "intentional",
+            acceptedAt: "2026-01-01T00:00:00.000Z",
+          },
+        ],
         "cli-a",
       );
       storage.writeDeprecations(
-        [{ path: "root -> option[--y]", removeBy: "2.0.0", deprecatedAt: "2026-01-01T00:00:00.000Z" }],
+        [
+          {
+            path: "root -> option[--y]",
+            removeBy: "2.0.0",
+            deprecatedAt: "2026-01-01T00:00:00.000Z",
+          },
+        ],
         "cli-a",
       );
       return {
@@ -203,11 +218,7 @@ describe("storage - namespaced targets (monorepo support)", () => {
     expect(result.acceptedA).toHaveLength(1);
     expect(result.acceptedUnnamespaced).toEqual([]);
     expect(result.deprecatedA).toHaveLength(1);
-    expect(
-      existsSync(path.join(dir, ".cliguard", "cli-a", "accepted-breaks.json")),
-    ).toBe(true);
-    expect(
-      existsSync(path.join(dir, ".cliguard", "cli-a", "deprecations.json")),
-    ).toBe(true);
+    expect(existsSync(path.join(dir, ".cliguard", "cli-a", "accepted-breaks.json"))).toBe(true);
+    expect(existsSync(path.join(dir, ".cliguard", "cli-a", "deprecations.json"))).toBe(true);
   });
 });

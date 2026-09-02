@@ -162,7 +162,7 @@ export function resolveTargets(
 
   throw new Error(
     "cliguard: no entry given and no targets configured. Pass an entry file path, " +
-      'or add `targets: [{ name, entry, adapter? }, ...]` to cliguard.config.js.',
+      "or add `targets: [{ name, entry, adapter? }, ...]` to cliguard.config.js.",
   );
 }
 

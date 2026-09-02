@@ -43,7 +43,10 @@ function contract(root: CommandContract): Contract {
 
 describe("renderMarkdownDocs", () => {
   it("renders the root's own name as an H1 and its description as a paragraph", () => {
-    const md = renderMarkdownDocs(contract(command({ name: "mycli", description: "Example CLI" })), "fallback");
+    const md = renderMarkdownDocs(
+      contract(command({ name: "mycli", description: "Example CLI" })),
+      "fallback",
+    );
 
     expect(md).toContain("# mycli\n");
     expect(md).toContain("Example CLI\n");
@@ -112,7 +115,14 @@ describe("renderMarkdownDocs", () => {
 
   it("marks a required option with *(required)* in its description cell", () => {
     const root = command({
-      options: [option({ name: "target", flags: "-t, --target <t>", description: "build target", required: true })],
+      options: [
+        option({
+          name: "target",
+          flags: "-t, --target <t>",
+          description: "build target",
+          required: true,
+        }),
+      ],
     });
 
     const md = renderMarkdownDocs(contract(root), "fallback");

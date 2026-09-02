@@ -20,7 +20,12 @@ export function renderMarkdownDocs(contract: Contract, fallbackTitle: string): s
   }
   renderCommandBody(contract.root, lines);
   renderSubcommands(contract.root, 2, lines);
-  return lines.join("\n").replace(/\n{3,}/g, "\n\n").trimEnd() + "\n";
+  return (
+    lines
+      .join("\n")
+      .replace(/\n{3,}/g, "\n\n")
+      .trimEnd() + "\n"
+  );
 }
 
 function renderSubcommands(cmd: CommandContract, depth: number, lines: string[]): void {
@@ -75,7 +80,9 @@ function optionCell(option: OptionContract): string {
 function defaultCell(option: OptionContract): string {
   if (option.defaultValue === null || option.defaultValue === undefined) return "-";
   const rendered =
-    typeof option.defaultValue === "string" ? option.defaultValue : JSON.stringify(option.defaultValue);
+    typeof option.defaultValue === "string"
+      ? option.defaultValue
+      : JSON.stringify(option.defaultValue);
   return `\`${escapeCell(rendered)}\``;
 }
 

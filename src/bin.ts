@@ -145,7 +145,9 @@ program
       withSuppressedExit(async () => {
         if (contractExists(target.namespace)) {
           const suffix = target.namespace ? ` ${target.namespace}` : "";
-          console.warn(`A contract already exists. Run "cliguard update${suffix}" to overwrite it.`);
+          console.warn(
+            `A contract already exists. Run "cliguard update${suffix}" to overwrite it.`,
+          );
           return 1;
         }
 
@@ -263,7 +265,7 @@ program
     "<entry>",
     "path to the target CLI's entry file, or a configured cliguard.config.js target's name - " +
       "always required here (unlike check/init/update): accepting a change is inherently a " +
-      "one-target operation, so there's no sensible \"omit to run every target\" mode",
+      'one-target operation, so there\'s no sensible "omit to run every target" mode',
   )
   .argument(
     "<changePath>",
