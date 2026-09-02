@@ -22,6 +22,16 @@ jobs:
           node-version: ${{ matrix.node-version }}
           cache: npm
 
+      # The click adapter's own tests spawn a real python3/python with
+      # click installed - explicit here rather than relying on whatever a
+      # given runner image happens to already have (ubuntu-latest's did,
+      # by luck of some other preinstalled tool depending on it; macOS's
+      # didn't - caught live when this matrix first ran).
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+      - run: pip install click
+
       - run: npm ci
       - run: npm run build
       - run: npm run lint

@@ -19,6 +19,14 @@ jobs:
           cache: npm
           registry-url: https://registry.npmjs.org
 
+      # See ci.yml's identical step - the click adapter's tests need a
+      # real python3/python with click installed, not whatever a given
+      # runner image happens to already carry.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+      - run: pip install click
+
       - run: npm ci
       - run: npm run build
       - run: npm run lint
