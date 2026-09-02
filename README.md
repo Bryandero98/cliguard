@@ -370,7 +370,7 @@ Same exit code either way - `1` on an unacknowledged BREAKING change, `0` otherw
 
 `cliguard init --with-ci` scaffolds the workflow below for you - `git add .github/workflows/cliguard.yml` and you're done. Prefer to see it first, or wire it up by hand? Read on.
 
-The bundled GitHub Action (`Bryandero98/cliguard@v1`) is the recommended way to run this in CI: on top of the same exit-code gate as `npx cliguard check`, it posts the diff as a PR comment - updated in place on every push, not a new one each time - so a reviewer sees exactly what changed without opening the CI log:
+The bundled GitHub Action (`Bryandero98/cliguard@v0`) is the recommended way to run this in CI: on top of the same exit-code gate as `npx cliguard check`, it posts the diff as a PR comment - updated in place on every push, not a new one each time - so a reviewer sees exactly what changed without opening the CI log:
 
 ```yaml
 # .github/workflows/cliguard.yml
@@ -386,7 +386,7 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 22.x }
       - run: npm ci
-      - uses: Bryandero98/cliguard@v1
+      - uses: Bryandero98/cliguard@v0
         with:
           entry: ./bin/cli.js
           # adapter: yargs        # default: commander

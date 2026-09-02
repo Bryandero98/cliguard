@@ -72,3 +72,17 @@ jobs:
         with:
           body_path: release-notes.md
           generate_release_notes: false
+
+      # Keeps the bundled Action's own major-version tag (e.g. v0) pointing
+      # at the latest release in that major line - the standard GitHub
+      # Actions convention, so `uses: Bryandero98/cliguard@v0` (what the
+      # README documents) always resolves to the newest 0.x.y instead of
+      # going stale the moment this workflow's tag moves past it.
+      - name: Move the major version tag
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          MAJOR_TAG="v${VERSION%%.*}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -f "$MAJOR_TAG"
+          git push origin "$MAJOR_TAG" --force
