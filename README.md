@@ -319,6 +319,18 @@ Off by default so it never changes behavior for an existing CI config - opt in p
 
 A `--strict`-only change is real BREAKING output, so `cliguard accept` needs the same flag to find it - `cliguard accept ./bin/cli.js "root -> copy" --strict --reason "..."` - without it, `accept` compares in default (non-strict) mode and won't see the change at all.
 
+## Architecture
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/architecture-dark.svg">
+  <img src="docs/architecture-light.svg" alt="Diagram: cliguard check loads the target CLI through a framework adapter to extract a fresh Contract, compares it against the committed contract.json using DiffEngine, classifies every change as BREAKING, PATCH or ADDITIVE, and exits 1 only if an unacknowledged BREAKING change remains.">
+</picture>
+
+The interesting part isn't the diff - it's getting the CLI's true shape out
+of code that may never export it. See "Entry files that build the CLI
+lazily" below for how the adapter reaches a Commander/CAC/Yargs instance
+that's never assigned to anything exported.
+
 ## Programmatic API
 
 Everything above is the CLI. The same extraction and diff logic is also available as a library, for a custom build script, monorepo tool, or bot that wants to embed a contract check without spawning `npx cliguard` as a subprocess:

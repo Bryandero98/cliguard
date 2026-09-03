@@ -1,0 +1,109 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1670 500" role="img" aria-label="Diagram: cliguard check loads the target CLI through a framework adapter to extract a fresh Contract, compares it against the committed contract.json using DiffEngine, classifies every change as BREAKING, PATCH or ADDITIVE, and exits 1 only if an unacknowledged BREAKING change remains.">
+          <style>
+    text { font-family: "IBM Plex Sans", -apple-system, "Segoe UI", sans-serif; fill: #f1ead9; }
+    .mono { font-family: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace; }
+    .title { font-weight: 600; }
+    .label { fill: #a89a80; }
+  </style>
+          <defs>
+            <marker id="cg-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="currentColor"></path>
+            </marker>
+          </defs>
+
+          <!-- side: committed contract, feeds DiffEngine as "old" -->
+          <g>
+            <rect x="870" y="40" width="220" height="100" rx="5" fill="#1e1a13" stroke="#f1ead9" stroke-width="1.4" stroke-dasharray="4 3"></rect>
+            <text x="980" y="76" text-anchor="middle" class="title mono" font-size="13.5">.cliguard/contract.json</text>
+            <text x="980" y="100" text-anchor="middle" class="label mono" font-size="11.5">committed baseline</text>
+          </g>
+          <g stroke="currentColor" fill="none" color="#a89a80" stroke-dasharray="3 4">
+            <line x1="980" y1="140" x2="980" y2="206" stroke-width="1.4" marker-end="url(#cg-arrow)"></line>
+          </g>
+          <text x="1000" y="180" text-anchor="start" class="mono" font-size="11" fill="#a89a80">old</text>
+
+          <!-- main row -->
+          <g>
+            <rect x="40" y="210" width="230" height="140" rx="5" fill="#1e1a13" stroke="#f1ead9" stroke-width="1.5"></rect>
+            <text x="155" y="266" text-anchor="middle" class="title mono" font-size="14.5">$ cliguard check</text>
+            <text x="155" y="286" text-anchor="middle" class="title mono" font-size="14.5">&lt;entry&gt;</text>
+            <text x="155" y="316" text-anchor="middle" class="label mono" font-size="11">your CLI's own entry.js</text>
+          </g>
+
+          <g>
+            <rect x="340" y="210" width="220" height="140" rx="5" fill="#262a4d" stroke="#9aa3e8" stroke-width="1.5"></rect>
+            <text x="450" y="258" text-anchor="middle" class="title" font-size="16">adapter</text>
+            <text x="450" y="284" text-anchor="middle" class="label mono" font-size="11">commander · cac</text>
+            <text x="450" y="300" text-anchor="middle" class="label mono" font-size="11">yargs · click</text>
+            <text x="450" y="326" text-anchor="middle" class="label mono" font-size="10.5">① captures construction — fig. 2</text>
+          </g>
+
+          <g>
+            <rect x="630" y="210" width="170" height="140" rx="5" fill="#1e1a13" stroke="#f1ead9" stroke-width="1.5"></rect>
+            <text x="715" y="270" text-anchor="middle" class="title" font-size="16">Contract</text>
+            <text x="715" y="296" text-anchor="middle" class="label mono" font-size="11">freshly extracted</text>
+            <text x="715" y="312" text-anchor="middle" class="label mono" font-size="11">(new)</text>
+          </g>
+
+          <g>
+            <rect x="870" y="210" width="220" height="140" rx="5" fill="#1e1a13" stroke="#f1ead9" stroke-width="1.5"></rect>
+            <text x="980" y="266" text-anchor="middle" class="title" font-size="16">DiffEngine</text>
+            <text x="980" y="292" text-anchor="middle" class="label mono" font-size="11">compare(old, new)</text>
+            <text x="980" y="308" text-anchor="middle" class="label mono" font-size="11">+ config · deprecations</text>
+          </g>
+
+          <g>
+            <rect x="1160" y="210" width="210" height="140" rx="5" fill="#1e1a13" stroke="#f1ead9" stroke-width="1.5"></rect>
+            <text x="1265" y="240" text-anchor="middle" class="title" font-size="14">classified diff</text>
+            <circle cx="1195" cy="266" r="5" fill="#e2726f"></circle>
+            <text x="1210" y="271" text-anchor="start" class="mono" font-size="12">BREAKING</text>
+            <circle cx="1195" cy="294" r="5" fill="#e3b34a"></circle>
+            <text x="1210" y="299" text-anchor="start" class="mono" font-size="12">PATCH</text>
+            <circle cx="1195" cy="322" r="5" fill="#7bc98a"></circle>
+            <text x="1210" y="327" text-anchor="start" class="mono" font-size="12">ADDITIVE</text>
+          </g>
+
+          <g>
+            <rect x="1440" y="210" width="190" height="140" rx="5" fill="#1e1a13" stroke="#f1ead9" stroke-width="1.5"></rect>
+            <text x="1535" y="258" text-anchor="middle" class="title" font-size="16">exit code</text>
+            <text x="1535" y="284" text-anchor="middle" class="label mono" font-size="11">0 — all clear</text>
+            <text x="1535" y="300" text-anchor="middle" class="label mono" font-size="11">1 — real BREAKING</text>
+            <text x="1535" y="316" text-anchor="middle" class="label mono" font-size="11">change → fails CI</text>
+          </g>
+
+          <!-- main row arrows -->
+          <g stroke="currentColor" fill="none" color="#f1ead9">
+            <line x1="272" y1="280" x2="336" y2="280" stroke-width="1.6" marker-end="url(#cg-arrow)"></line>
+          </g>
+          <text x="304" y="264" text-anchor="middle" class="mono" font-size="10.5">requires</text>
+
+          <g stroke="currentColor" fill="none" color="#9aa3e8">
+            <line x1="562" y1="280" x2="626" y2="280" stroke-width="1.6" marker-end="url(#cg-arrow)"></line>
+          </g>
+          <text x="594" y="264" text-anchor="middle" class="mono" font-size="10.5" fill="#9aa3e8">walks it</text>
+
+          <g stroke="currentColor" fill="none" color="#f1ead9">
+            <line x1="802" y1="280" x2="866" y2="280" stroke-width="1.6" marker-end="url(#cg-arrow)"></line>
+          </g>
+          <text x="834" y="264" text-anchor="middle" class="mono" font-size="10.5">new</text>
+
+          <g stroke="currentColor" fill="none" color="#f1ead9">
+            <line x1="1092" y1="280" x2="1156" y2="280" stroke-width="1.6" marker-end="url(#cg-arrow)"></line>
+          </g>
+          <text x="1124" y="264" text-anchor="middle" class="mono" font-size="10.5">diff</text>
+
+          <g stroke="currentColor" fill="none" color="#f1ead9">
+            <line x1="1372" y1="280" x2="1436" y2="280" stroke-width="1.6" marker-end="url(#cg-arrow)"></line>
+          </g>
+          <text x="1404" y="264" text-anchor="middle" class="mono" font-size="10.5">left?</text>
+
+          <!-- side: accepted-breaks, feeds classified output from below -->
+          <g>
+            <rect x="1160" y="420" width="210" height="70" rx="5" fill="#1e1a13" stroke="#f1ead9" stroke-width="1.4" stroke-dasharray="4 3"></rect>
+            <text x="1265" y="448" text-anchor="middle" class="title mono" font-size="12.5">accepted-breaks.json</text>
+            <text x="1265" y="468" text-anchor="middle" class="label mono" font-size="10.5">marks a BREAKING as OK</text>
+          </g>
+          <g stroke="currentColor" fill="none" color="#a89a80" stroke-dasharray="3 4">
+            <line x1="1265" y1="420" x2="1265" y2="354" stroke-width="1.4" marker-end="url(#cg-arrow)"></line>
+          </g>
+        </svg>
