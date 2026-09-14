@@ -1,8 +1,11 @@
 import { execFileSync } from "child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "fs";
+import type { IncomingMessage, Server, ServerResponse } from "http";
+import { createServer } from "http";
+import type { AddressInfo } from "net";
 import path from "path";
 
-import { ensureDir, makeTempDir, runCli } from "../test-helpers/run-cli";
+import { ensureDir, makeTempDir, runCli, runCliAsync } from "../test-helpers/run-cli";
 
 // A throwaway git identity, scoped to a single command via -c flags rather
 // than relying on (or polluting) any real global/user git config - keeps
@@ -24,6 +27,40 @@ function commitContract(dir: string): void {
   git(dir, ["init", "-q", "-b", "main"]);
   git(dir, ["add", "."]);
   git(dir, ["commit", "-q", "-m", "cliguard baseline"]);
+}
+
+interface WebhookReceiver {
+  readonly url: string;
+  readonly requests: { body: string; contentType: string | undefined }[];
+  close: () => Promise<void>;
+}
+
+/** A real local HTTP server standing in for a SaaS webhook receiver - proves `--webhook`/`CLIGUARD_WEBHOOK_URL` actually POST over the network, not just that postWebhook() was called. */
+function startWebhookReceiver(status = 200): Promise<WebhookReceiver> {
+  const requests: { body: string; contentType: string | undefined }[] = [];
+  let server: Server;
+  return new Promise((resolvePromise) => {
+    server = createServer((req: IncomingMessage, res: ServerResponse) => {
+      const chunks: Buffer[] = [];
+      req.on("data", (chunk: Buffer) => chunks.push(chunk));
+      req.on("end", () => {
+        requests.push({
+          body: Buffer.concat(chunks).toString("utf8"),
+          contentType: req.headers["content-type"],
+        });
+        res.writeHead(status);
+        res.end();
+      });
+    });
+    server.listen(0, "127.0.0.1", () => {
+      const { port } = server.address() as AddressInfo;
+      resolvePromise({
+        url: `http://127.0.0.1:${port}`,
+        requests,
+        close: () => new Promise((resolveClose) => server.close(() => resolveClose())),
+      });
+    });
+  });
 }
 
 // Exercises the full init/check/update flow through the real built CLI
@@ -1445,6 +1482,89 @@ describe("cliguard CLI (subprocess)", () => {
       // eslint-disable-next-line @typescript-eslint/no-require-imports -- reading the same package.json bin.ts itself reads, to assert against the real value rather than a hardcoded copy
       const packageJson = require("../../package.json") as { version: string };
       expect(output.trim()).toBe(packageJson.version);
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("check --webhook POSTs the diff as JSON to the given URL, unaffected by the exit code", async () => {
+    const { dir, cleanup } = makeTempDir();
+    const fixture = writeModifiedFixture((source) =>
+      source
+        .split("\n")
+        .filter((line) => !line.includes(".requiredOption("))
+        .join("\n"),
+    );
+    const receiver = await startWebhookReceiver();
+    try {
+      runCli(dir, ["init", FIXTURE]);
+
+      const { status } = await runCliAsync(dir, ["check", fixture.path, "--webhook", receiver.url]);
+      expect(status).toBe(1);
+
+      expect(receiver.requests).toHaveLength(1);
+      expect(receiver.requests[0].contentType).toBe("application/json");
+      const payload = JSON.parse(receiver.requests[0].body) as {
+        entry: string;
+        changes: { type: string; path: string; message: string }[];
+      };
+      expect(payload.entry).toBe(fixture.path);
+      expect(payload.changes).toContainEqual({
+        type: "BREAKING",
+        path: "root -> build -> option[--target]",
+        message: 'Option "--target" was removed.',
+      });
+    } finally {
+      await receiver.close();
+      cleanup();
+      fixture.cleanup();
+    }
+  });
+
+  it("CLIGUARD_WEBHOOK_URL env var is used when --webhook isn't passed", async () => {
+    const { dir, cleanup } = makeTempDir();
+    const receiver = await startWebhookReceiver();
+    try {
+      runCli(dir, ["init", FIXTURE]);
+
+      const { status } = await runCliAsync(dir, ["check", FIXTURE], {
+        CLIGUARD_WEBHOOK_URL: receiver.url,
+      });
+      expect(status).toBe(0);
+      expect(receiver.requests).toHaveLength(1);
+      const payload = JSON.parse(receiver.requests[0].body) as { changes: unknown[] };
+      expect(payload.changes).toEqual([]);
+    } finally {
+      await receiver.close();
+      cleanup();
+    }
+  });
+
+  it("check still exits with the correct code and prints its own error when the webhook is unreachable", async () => {
+    const { dir, cleanup } = makeTempDir();
+    // A receiver that's opened and immediately closed - the OS still
+    // refuses a connection to that port fast (ECONNREFUSED), unlike a
+    // low/reserved port number that some platforms silently drop instead
+    // of resetting, which previously made this test hang.
+    const receiver = await startWebhookReceiver();
+    await receiver.close();
+    try {
+      runCli(dir, ["init", FIXTURE]);
+
+      // runCliAsync (not runCli): the warning goes to stderr on an
+      // otherwise-successful (exit 0) run, and only runCliAsync's
+      // execFile-based capture merges stderr into `output` regardless of
+      // exit code - runCli's execFileSync only captures stderr on a
+      // non-zero exit.
+      const { status, output } = await runCliAsync(dir, [
+        "check",
+        FIXTURE,
+        "--webhook",
+        receiver.url,
+      ]);
+      expect(status).toBe(0);
+      expect(output).toContain("CLI contract is intact.");
+      expect(output).toContain("webhook POST");
     } finally {
       cleanup();
     }

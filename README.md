@@ -378,6 +378,27 @@ npx cliguard check ./bin/cli.js --format rdjsonl | reviewdog -f=rdjsonl -reporte
 
 Same exit code either way - `1` on an unacknowledged BREAKING change, `0` otherwise - so any of the three drops straight into a CI job that already fails the build on a non-zero exit.
 
+### Webhook reporter for SaaS integrations
+
+`--webhook <url>` (or a `CLIGUARD_WEBHOOK_URL` environment variable) POSTs the same diff `check` just computed as JSON to a URL of your choice - the first building block toward the hosted dashboard/Slack-alert roadmap below, v1 scoped to just the POST itself:
+
+```sh
+npx cliguard check ./bin/cli.js --webhook https://example.com/cliguard-hook
+```
+
+```json
+{
+  "entry": "./bin/cli.js",
+  "repo": "git@github.com:you/your-cli.git",
+  "commit": "a1b2c3d4e5f6...",
+  "changes": [
+    { "type": "BREAKING", "path": "root -> option[--target]", "message": "Option \"--target\" was removed." }
+  ]
+}
+```
+
+`repo`/`commit` are best-effort (`git config --get remote.origin.url` / `git rev-parse HEAD`) - `null` outside a git repository. A webhook that's unreachable or slow to respond never fails `check` or changes its exit code - it just prints a warning and moves on.
+
 ## CI integration
 
 `cliguard init --with-ci` scaffolds the workflow below for you - `git add .github/workflows/cliguard.yml` and you're done. Prefer to see it first, or wire it up by hand? Read on.

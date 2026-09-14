@@ -7,6 +7,7 @@ import { applyConfig, loadConfig, resolveTargets, type ResolvedTarget } from "./
 import { DiffEngine, type DiffResult } from "./core/diff.engine";
 import { renderMarkdownDocs } from "./core/docs";
 import { toGitLabCodeQuality, toJUnitXml, toRdjsonl } from "./core/report-formats";
+import { buildWebhookPayload, postWebhook } from "./core/webhook";
 import {
   ciWorkflowExists,
   contractExists,
@@ -193,6 +194,10 @@ program
     "enable extra rules for currently-silent risky changes (e.g. a positional argument reorder)",
     false,
   )
+  .option(
+    "--webhook <url>",
+    "POST the diff result as JSON to this URL after check runs (or set CLIGUARD_WEBHOOK_URL)",
+  )
   .action(
     async (
       entry: string | undefined,
@@ -202,9 +207,11 @@ program
         format?: string;
         against?: string;
         strict: boolean;
+        webhook?: string;
       },
     ) => {
       const targets = resolveTargetsOrExit(entry, options.adapter);
+      const webhookUrl = options.webhook ?? process.env.CLIGUARD_WEBHOOK_URL;
 
       const exitCode = await runAcrossTargets(targets, (target) =>
         withSuppressedExit(async () => {
@@ -235,6 +242,14 @@ program
           const hasBreaking = diff.some(
             (change) => change.type === ChangeType.BREAKING && !acceptedPaths.has(change.path),
           );
+
+          if (webhookUrl) {
+            try {
+              await postWebhook(webhookUrl, buildWebhookPayload(target.entry, diff));
+            } catch (error) {
+              console.error(error instanceof Error ? error.message : String(error));
+            }
+          }
 
           if (format !== "text") {
             console.log(

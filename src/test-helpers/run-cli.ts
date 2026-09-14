@@ -1,4 +1,4 @@
-import { execFileSync } from "child_process";
+import { execFile, execFileSync } from "child_process";
 import { mkdtempSync, rmSync, mkdirSync } from "fs";
 import { tmpdir } from "os";
 import path from "path";
@@ -15,14 +15,50 @@ export interface CliResult {
   readonly output: string;
 }
 
-export function runCli(cwd: string, args: string[]): CliResult {
+export function runCli(cwd: string, args: string[], env?: Record<string, string>): CliResult {
   try {
-    const output = execFileSync(process.execPath, [BIN, ...args], { cwd, encoding: "utf8" });
+    const output = execFileSync(process.execPath, [BIN, ...args], {
+      cwd,
+      encoding: "utf8",
+      env: env ? { ...process.env, ...env } : process.env,
+    });
     return { status: 0, output };
   } catch (err) {
     const e = err as { status: number; stdout: string; stderr: string };
     return { status: e.status, output: `${e.stdout}${e.stderr}` };
   }
+}
+
+/**
+ * Same as `runCli`, but non-blocking: needed whenever the CLI subprocess
+ * itself has to reach back into *this* process (e.g. an in-process HTTP
+ * server standing in for a webhook receiver in a test) - `runCli`'s
+ * `execFileSync` blocks this process's entire event loop until the child
+ * exits, so that in-process server could never actually handle the
+ * request, and `fetch` in the child would time out waiting for a response
+ * that was never sent.
+ */
+export function runCliAsync(
+  cwd: string,
+  args: string[],
+  env?: Record<string, string>,
+): Promise<CliResult> {
+  return new Promise((resolvePromise) => {
+    execFile(
+      process.execPath,
+      [BIN, ...args],
+      { cwd, encoding: "utf8", env: env ? { ...process.env, ...env } : process.env },
+      (error, stdout, stderr) => {
+        const status =
+          error && typeof (error as { code?: number }).code === "number"
+            ? (error as { code: number }).code
+            : error
+              ? 1
+              : 0;
+        resolvePromise({ status, output: `${stdout}${stderr}` });
+      },
+    );
+  });
 }
 
 /** A fresh throwaway directory, cleaned up by the returned function - call it in a `finally`. */
