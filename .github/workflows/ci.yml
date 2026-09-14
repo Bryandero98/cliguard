@@ -32,6 +32,13 @@ jobs:
           python-version: "3.x"
       - run: pip install click==8.3.2
 
+      # The cobra adapter is a PoC (issue #9): its own tests run the
+      # example under examples/cobra-dump via `go run`, same reasoning as
+      # the explicit Python setup above.
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+
       - run: npm ci
       - run: npm run build
       - run: npm run lint

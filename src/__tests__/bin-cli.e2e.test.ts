@@ -1,5 +1,5 @@
 import { execFileSync } from "child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "fs";
+import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "fs";
 import type { IncomingMessage, Server, ServerResponse } from "http";
 import { createServer } from "http";
 import type { AddressInfo } from "net";
@@ -1633,6 +1633,79 @@ describe("click adapter (init/check through the real CLI)", () => {
       const { status, output } = runCli(dir, ["preview", notAClick, "--adapter", "click"]);
       expect(status).toBe(1);
       expect(output).toContain("no Click command found");
+    } finally {
+      cleanup();
+    }
+  });
+});
+
+// The cobra adapter is a proof of concept (issue #9), not a shipped
+// integration - see src/adapters/cobra.adapter.ts and examples/cobra-dump.
+// Like the click adapter block above, this proves init/check/the diff
+// engine all agree with it end to end through the real, built cliguard
+// CLI - not just via CobraAdapter's own unit tests. Requires a `go`
+// toolchain on PATH (extract() runs the example via `go run`).
+describe("cobra adapter (PoC - init/check through the real CLI)", () => {
+  const COBRA_EXAMPLE_DIR = path.join(__dirname, "..", "..", "examples", "cobra-dump");
+
+  /** A full copy of the example Cobra module (main.go, clidump/, go.mod/go.sum) so a modified copy can still `go run .` on its own, without touching the real example under examples/cobra-dump. */
+  function copyCobraExample(): { dir: string; cleanup: () => void } {
+    ensureDir(SCRATCH_ROOT);
+    const dir = mkdtempSync(path.join(SCRATCH_ROOT, "cobra-fixture-"));
+    cpSync(COBRA_EXAMPLE_DIR, dir, { recursive: true });
+    return { dir, cleanup: () => rmSync(dir, { recursive: true, force: true }) };
+  }
+
+  it("init + check round-trip cleanly for the unchanged example Cobra CLI", () => {
+    const { dir, cleanup } = makeTempDir();
+    try {
+      expect(runCli(dir, ["init", COBRA_EXAMPLE_DIR, "--adapter", "cobra"]).status).toBe(0);
+      const { status, output } = runCli(dir, ["check", COBRA_EXAMPLE_DIR, "--adapter", "cobra"]);
+      expect(status).toBe(0);
+      expect(output).toContain("CLI contract is intact.");
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("check reports a real BREAKING change (a removed required flag) from a modified copy of the example Cobra CLI", () => {
+    const { dir, cleanup } = makeTempDir();
+    const copy = copyCobraExample();
+    // Removes exactly the three lines that declare and require the
+    // `--target` flag, leaving the `target` variable itself in place
+    // (still referenced by the Printf below it) - a real, compiling
+    // BREAKING change, not a fabricated Contract object.
+    try {
+      const mainGoPath = path.join(copy.dir, "main.go");
+      const requiredFlagBlock =
+        '\tbuildCmd.Flags().StringVarP(&target, "target", "t", "", "build target")\n' +
+        '\tif err := buildCmd.MarkFlagRequired("target"); err != nil {\n' +
+        "\t\tpanic(err)\n" +
+        "\t}\n";
+      const original = readFileSync(mainGoPath, "utf8");
+      expect(original).toContain(requiredFlagBlock);
+      writeFileSync(mainGoPath, original.replace(requiredFlagBlock, ""));
+
+      runCli(dir, ["init", COBRA_EXAMPLE_DIR, "--adapter", "cobra"]);
+      const { status, output } = runCli(dir, ["check", copy.dir, "--adapter", "cobra"]);
+
+      expect(status).toBe(1);
+      expect(output).toContain("🔴");
+      expect(output).toContain('Option "--target" was removed');
+    } finally {
+      cleanup();
+      copy.cleanup();
+    }
+  });
+
+  it("doctor reports the cobra adapter's real, documented PoC limitations", () => {
+    const { dir, cleanup } = makeTempDir();
+    try {
+      const { status, output } = runCli(dir, ["doctor", COBRA_EXAMPLE_DIR, "--adapter", "cobra"]);
+      expect(status).toBe(0);
+      expect(output).toContain("Adapter: cobra");
+      expect(output).toContain("Proof of concept");
+      expect(output).toContain("✅ Extraction succeeded");
     } finally {
       cleanup();
     }
