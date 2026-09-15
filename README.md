@@ -103,6 +103,14 @@ npx cliguard init ./cli.py --adapter click
 
 Unlike the JS adapters, `click` needs a real Python interpreter: cliguard shells out to `python3` (falling back to `python`) with `click` installed in that same environment - there's no in-process way to introspect a Python object from Node. `pip install click` in whichever Python cliguard's shell can already reach is all that's required; nothing npm-installable covers this one.
 
+Built with [oclif](https://oclif.io/) instead? Point cliguard at the plugin's own root directory (wherever its `package.json` lives) and pass `--adapter oclif`:
+
+```sh
+npx cliguard init ./ --adapter oclif
+```
+
+Unlike every other adapter, this one doesn't need to load your CLI's code at all - oclif already ships a first-class `oclif manifest` command that dumps a complete, structured description of every command's flags and arguments as `oclif.manifest.json`. cliguard reads that file directly if your project already has one (some oclif projects commit it, or produce it as part of their own build), or runs `oclif manifest` itself and cleans up afterward if it doesn't. Either way, `oclif` needs to be a devDependency of the target project - the same one your own `npm run prepack` (or similar) would already need.
+
 ### Entry files that build the CLI lazily
 
 Not every real CLI exports its instance - plenty build it inside a function that only runs when something actually calls it, or just never had a reason to export it. Pointing cliguard straight at a file like that would fail with "no instance found" under the rule above alone.
@@ -345,7 +353,7 @@ const diff = compareContracts(oldContract, newContract, { strict: true });
 const breaking = diff.filter((change) => change.type === ChangeType.BREAKING);
 ```
 
-`listAdapters()` returns every name `extractContract`'s second argument accepts. `DiffEngine`, every adapter class (`CommanderAdapter`/`CacAdapter`/`YargsAdapter`), and the `toJUnitXml`/`toGitLabCodeQuality`/`toRdjsonl` formatters are all exported too, for anything more custom than the two convenience functions cover.
+`listAdapters()` returns every name `extractContract`'s second argument accepts. `DiffEngine`, every adapter class (`CommanderAdapter`/`CacAdapter`/`YargsAdapter`/`ClickAdapter`/`CobraAdapter`/`OclifAdapter`), and the `toJUnitXml`/`toGitLabCodeQuality`/`toRdjsonl` formatters are all exported too, for anything more custom than the two convenience functions cover.
 
 ## How changes get classified
 
@@ -356,7 +364,7 @@ const breaking = diff.filter((change) => change.type === ChangeType.BREAKING);
 | **Alias** | 🔴 BREAKING | 🟡 PATCH | - | - |
 | **Description** | - | - | - | 🟡 PATCH |
 
-Full rules live in [`src/core/diff.engine.ts`](src/core/diff.engine.ts) - it's the one file worth reading if you want to know exactly why something was flagged.
+Every rule cliguard enforces - including how environment variable bindings and each escape hatch (`accept`/`deprecate`/`[unstable]`) factor in - is documented in full in [`RULES.md`](RULES.md), the same spirit as [oasdiff documenting its own ~755 OpenAPI checks](https://github.com/oasdiff/oasdiff) separately from its source. The underlying implementation and its own tests are [`src/core/diff.engine.ts`](src/core/diff.engine.ts) and [`src/__tests__/diff-engine.test.ts`](src/__tests__/diff-engine.test.ts), if `RULES.md` and the code ever disagree.
 
 ### Reports for non-GitHub CI
 
@@ -399,6 +407,16 @@ npx cliguard check ./bin/cli.js --webhook https://example.com/cliguard-hook
 
 `repo`/`commit` are best-effort (`git config --get remote.origin.url` / `git rev-parse HEAD`) - `null` outside a git repository. A webhook that's unreachable or slow to respond never fails `check` or changes its exit code - it just prints a warning and moves on.
 
+### `--open-diff`: opening a real difference in your editor
+
+Inspired by how [ApprovalTests](https://approvaltests.com/)' reporters open an external diff tool the moment a test fails - `--open-diff` does the same the moment `check` finds a real difference: it writes the expected and actual contracts to temp files and, if [VS Code](https://code.visualstudio.com/)'s own `code` CLI is on PATH, opens its built-in two-pane diff view on them.
+
+```sh
+npx cliguard check ./bin/cli.js --open-diff
+```
+
+No supported editor found on PATH? cliguard never fails hard over it - it just prints both files' paths instead, so you can open them with whatever you have. Either way, `--open-diff` never changes `check`'s own exit code, and the editor (when one opens) is launched detached from cliguard's own process, so `check` still exits immediately rather than waiting on you to close it.
+
 ## CI integration
 
 `cliguard init --with-ci` scaffolds the workflow below for you - `git add .github/workflows/cliguard.yml` and you're done. Prefer to see it first, or wire it up by hand? Read on.
@@ -435,7 +453,7 @@ Set `comment-on-pr: false` to keep the exit-code gate without the comment, or us
 
 ## Supported frameworks
 
-[Commander.js](https://github.com/tj/commander.js) (default), [CAC](https://github.com/cacjs/cac) (`--adapter cac`), [Yargs](https://github.com/yargs/yargs) (`--adapter yargs`), and Python's [Click](https://click.palletsprojects.com/) (`--adapter click`) today, all requiring zero changes to the target CLI itself.
+[Commander.js](https://github.com/tj/commander.js) (default), [CAC](https://github.com/cacjs/cac) (`--adapter cac`), [Yargs](https://github.com/yargs/yargs) (`--adapter yargs`), Python's [Click](https://click.palletsprojects.com/) (`--adapter click`), and [oclif](https://oclif.io/) (`--adapter oclif`, via its own `oclif manifest` command) today, all requiring zero changes to the target CLI itself.
 
 Go's [Cobra](https://github.com/spf13/cobra) (`--adapter cobra`) also exists, but as a **proof of concept only** (see [issue #9](https://github.com/Bryandero98/cliguard/issues/9)) - unlike every adapter above, it needs the target CLI's own author to wire in a hidden dump subcommand (there's no published `cliguard-go` package yet to do that for them). See [`examples/cobra-dump/`](examples/cobra-dump/) for the full example and [`src/adapters/cobra.adapter.ts`](src/adapters/cobra.adapter.ts) for exactly what it does and doesn't cover. Rust's [Clap](https://github.com/clap-rs/clap) (`--adapter clap`) would follow the same pattern (`clap::Command` is introspectable before parsing, same as `clap_complete`/`clap_mangen` already rely on) but isn't built yet - see [issue #10](https://github.com/Bryandero98/cliguard/issues/10).
 

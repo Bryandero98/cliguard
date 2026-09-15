@@ -6,6 +6,7 @@ import { adapters, resolveAdapter } from "./adapters/registry";
 import { applyConfig, loadConfig, resolveTargets, type ResolvedTarget } from "./core/config";
 import { DiffEngine, type DiffResult } from "./core/diff.engine";
 import { renderMarkdownDocs } from "./core/docs";
+import { detectDiffTool, openDiffInEditor } from "./core/open-diff";
 import { toGitLabCodeQuality, toJUnitXml, toRdjsonl } from "./core/report-formats";
 import { buildWebhookPayload, postWebhook } from "./core/webhook";
 import {
@@ -198,6 +199,11 @@ program
     "--webhook <url>",
     "POST the diff result as JSON to this URL after check runs (or set CLIGUARD_WEBHOOK_URL)",
   )
+  .option(
+    "--open-diff",
+    "on a real difference, write the expected/actual contracts to temp files and open them in your editor's diff view (falls back to printing the file paths if no supported editor is found)",
+    false,
+  )
   .action(
     async (
       entry: string | undefined,
@@ -208,6 +214,7 @@ program
         against?: string;
         strict: boolean;
         webhook?: string;
+        openDiff: boolean;
       },
     ) => {
       const targets = resolveTargetsOrExit(entry, options.adapter);
@@ -242,6 +249,17 @@ program
           const hasBreaking = diff.some(
             (change) => change.type === ChangeType.BREAKING && !acceptedPaths.has(change.path),
           );
+
+          if (options.openDiff && diff.length > 0) {
+            const opened = openDiffInEditor(oldContract, newContract, detectDiffTool());
+            console.log(
+              opened.openedWith
+                ? `🔍 --open-diff: opened ${opened.openedWith} --diff on the expected vs. actual contract.`
+                : "ℹ️  --open-diff: no supported editor found on PATH - contracts written to:\n" +
+                    `   expected: ${opened.oldPath}\n` +
+                    `   actual:   ${opened.newPath}`,
+            );
+          }
 
           if (webhookUrl) {
             try {

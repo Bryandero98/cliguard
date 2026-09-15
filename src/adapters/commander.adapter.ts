@@ -170,6 +170,10 @@ export class CommanderAdapter implements CliAdapter {
       valueType: this.inferValueType(option.flags),
       variadic: option.variadic ?? false,
       defaultValue: option.defaultValue ?? null,
+      // Commander's own Option.envVar, set via `.env("NAME")` - undefined
+      // (not stored at all) when never called, matching OptionContract's
+      // own `envVar?:` shape.
+      envVar: option.envVar,
     };
   }
 

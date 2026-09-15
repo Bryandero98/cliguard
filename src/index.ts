@@ -15,6 +15,7 @@ export { CacAdapter } from "./adapters/cac.adapter";
 export { ClickAdapter } from "./adapters/click.adapter";
 export { CobraAdapter } from "./adapters/cobra.adapter";
 export { CommanderAdapter } from "./adapters/commander.adapter";
+export { OclifAdapter } from "./adapters/oclif.adapter";
 export { YargsAdapter } from "./adapters/yargs.adapter";
 export { adapters, resolveAdapter } from "./adapters/registry";
 
@@ -71,7 +72,7 @@ export function compareContracts(
   return diffEngine.compare(oldContract, newContract, options);
 }
 
-/** Every adapter name `extractContract`/the CLI's `--adapter` flag will accept, e.g. ["commander", "cac", "yargs", "click", "cobra"] - "cobra" is a proof of concept, see src/adapters/cobra.adapter.ts. */
+/** Every adapter name `extractContract`/the CLI's `--adapter` flag will accept, e.g. ["commander", "cac", "yargs", "click", "cobra", "oclif"] - "cobra" is a proof of concept, see src/adapters/cobra.adapter.ts. */
 export function listAdapters(): string[] {
   return Object.keys(adapters);
 }

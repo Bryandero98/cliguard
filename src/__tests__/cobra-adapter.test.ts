@@ -47,6 +47,9 @@ describe("CobraAdapter (PoC - see issue #9)", () => {
       variadic: false,
       defaultValue: null,
     });
+    // Cobra/pflag has no built-in env var binding - always undefined, see
+    // the adapter's own documented limitations.
+    expect(byName.target.envVar).toBeUndefined();
     expect(byName.verbose).toMatchObject({
       required: false,
       valueType: "boolean",

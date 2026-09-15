@@ -55,6 +55,16 @@ describe("CommanderAdapter", () => {
     });
   });
 
+  it("maps an option's environment variable binding (Option.env()), and leaves it undefined for one without", async () => {
+    const adapter = new CommanderAdapter();
+    const contract = await adapter.extract(FIXTURE);
+    const build = contract.root.subcommands[0];
+    const byName = Object.fromEntries(build.options.map((o) => [o.name, o]));
+
+    expect(byName["api-key"]).toMatchObject({ envVar: "API_KEY" });
+    expect(byName.output.envVar).toBeUndefined();
+  });
+
   it("finds a Command that's never exported, via the construction-capture fallback", async () => {
     const adapter = new CommanderAdapter();
     const unexported = path.join(__dirname, "..", "__fixtures__", "unexported-eager-cli.js");

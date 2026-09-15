@@ -307,6 +307,88 @@ describe("DiffEngine", () => {
     );
   });
 
+  describe("envVar tracking", () => {
+    const option = {
+      flags: "-t, --target <target>",
+      name: "target",
+      aliases: ["-t"],
+      description: "build target",
+      required: false,
+      valueType: "string" as const,
+      variadic: false,
+      defaultValue: null,
+    };
+
+    it("flags a BREAKING change when an option's env var binding is removed", () => {
+      const oldContract = makeContract(
+        makeCommand({ options: [{ ...option, envVar: "BUILD_TARGET" }] }),
+      );
+      const newContract = makeContract(makeCommand({ options: [option] }));
+
+      const diff = engine.compare(oldContract, newContract);
+
+      expect(diff).toContainEqual({
+        type: ChangeType.BREAKING,
+        path: "root -> option[--target]",
+        message:
+          'Option "--target" no longer reads from environment variable "BUILD_TARGET" - ' +
+          "an invocation relying on that env var instead of the flag itself will silently stop working.",
+      });
+    });
+
+    it("flags an ADDITIVE change when an option's env var binding is added", () => {
+      const oldContract = makeContract(makeCommand({ options: [option] }));
+      const newContract = makeContract(
+        makeCommand({ options: [{ ...option, envVar: "BUILD_TARGET" }] }),
+      );
+
+      const diff = engine.compare(oldContract, newContract);
+
+      expect(diff).toContainEqual({
+        type: ChangeType.ADDITIVE,
+        path: "root -> option[--target]",
+        message: 'Option "--target" can now also be set via environment variable "BUILD_TARGET".',
+      });
+    });
+
+    it("flags a BREAKING change when an option's env var binding is renamed", () => {
+      const oldContract = makeContract(
+        makeCommand({ options: [{ ...option, envVar: "BUILD_TARGET" }] }),
+      );
+      const newContract = makeContract(
+        makeCommand({ options: [{ ...option, envVar: "CLI_TARGET" }] }),
+      );
+
+      const diff = engine.compare(oldContract, newContract);
+
+      expect(diff).toContainEqual({
+        type: ChangeType.BREAKING,
+        path: "root -> option[--target]",
+        message:
+          'Option "--target" environment variable binding changed from "BUILD_TARGET" to "CLI_TARGET" - ' +
+          'an invocation relying on "BUILD_TARGET" will silently stop working.',
+      });
+    });
+
+    it("flags nothing when the env var binding is unchanged", () => {
+      const oldContract = makeContract(
+        makeCommand({ options: [{ ...option, envVar: "BUILD_TARGET" }] }),
+      );
+      const newContract = makeContract(
+        makeCommand({ options: [{ ...option, envVar: "BUILD_TARGET" }] }),
+      );
+
+      expect(engine.compare(oldContract, newContract)).toEqual([]);
+    });
+
+    it("flags nothing when neither side ever declared an env var", () => {
+      const oldContract = makeContract(makeCommand({ options: [option] }));
+      const newContract = makeContract(makeCommand({ options: [option] }));
+
+      expect(engine.compare(oldContract, newContract)).toEqual([]);
+    });
+  });
+
   describe("collectPaths", () => {
     it("collects every command, option, and argument path reachable from root", () => {
       const contract = makeContract(

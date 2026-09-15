@@ -65,6 +65,7 @@ export class CobraAdapter implements CliAdapter {
     'OptionContract.valueType collapses every pflag type (string, int, stringSlice, ...) to "boolean" vs "string", the same simplification CacAdapter/YargsAdapter/ClickAdapter already make.',
     "defaultValue is parsed from pflag's own DefValue string representation - correct for primitives and slices, but a flag whose default is itself a JSON-looking string could round-trip wrong.",
     "A .go entry is run via `go run . <dump-subcommand>`, requiring a `go` toolchain on PATH - a compiled binary entry has no such requirement, matching how a real published cliguard-go integration would be used.",
+    "OptionContract.envVar is always undefined - Cobra/pflag itself has no built-in env var binding (that's normally layered on via viper, which this PoC's dump command doesn't wire in).",
   ];
 
   async extract(entryPath: string): Promise<Contract> {

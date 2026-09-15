@@ -331,6 +331,7 @@ export class DiffEngine {
     }
 
     results.push(...this.compareAliases(oldOption.aliases, newOption.aliases, path, label));
+    results.push(...this.compareEnvVar(oldOption.envVar, newOption.envVar, path, label));
 
     if (oldOption.description !== newOption.description) {
       results.push({
@@ -341,6 +342,53 @@ export class DiffEngine {
     }
 
     return results;
+  }
+
+  /**
+   * `envVar` is a single optional binding (unlike `aliases`, a set), so it
+   * gets its own three-way comparison rather than reusing `compareAliases`:
+   * losing the *only* way an env var could satisfy this flag is BREAKING
+   * (an existing invocation that only ever set the env var, never the flag
+   * itself, silently stops working), gaining one is purely ADDITIVE (every
+   * existing invocation keeps working exactly as before), and renaming it
+   * is BREAKING too - from a caller's perspective that's the same as
+   * losing the old binding, even though a new one appears in its place.
+   */
+  private compareEnvVar(
+    oldEnvVar: string | undefined,
+    newEnvVar: string | undefined,
+    path: string,
+    label: string,
+  ): DiffResult[] {
+    if (oldEnvVar === newEnvVar) return [];
+
+    if (oldEnvVar && !newEnvVar) {
+      return [
+        {
+          type: ChangeType.BREAKING,
+          path,
+          message: `${label} no longer reads from environment variable "${oldEnvVar}" - an invocation relying on that env var instead of the flag itself will silently stop working.`,
+        },
+      ];
+    }
+
+    if (!oldEnvVar && newEnvVar) {
+      return [
+        {
+          type: ChangeType.ADDITIVE,
+          path,
+          message: `${label} can now also be set via environment variable "${newEnvVar}".`,
+        },
+      ];
+    }
+
+    return [
+      {
+        type: ChangeType.BREAKING,
+        path,
+        message: `${label} environment variable binding changed from "${oldEnvVar}" to "${newEnvVar}" - an invocation relying on "${oldEnvVar}" will silently stop working.`,
+      },
+    ];
   }
 
   private compareArguments(

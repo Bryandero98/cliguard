@@ -3,13 +3,16 @@
 // arguments (required + variadic), a required option (yargs's own
 // `demandOption`, distinct from CAC's fixture, which has no equivalent),
 // every option shape (boolean, string with a default, string with no
-// default), and one genuinely global option declared outside any command.
+// default), one genuinely global option declared outside any command, and
+// `.env()` binding every option to an environment variable by convention
+// (PREFIX_OPTION_NAME).
 const yargs = require("yargs/yargs");
 
 const cli = yargs([])
   .exitProcess(false)
   .fail(() => {})
   .scriptName("mycli")
+  .env("MYCLI")
   .option("config", { alias: "c", describe: "config file path", type: "string" })
   .command(
     ["build <entry> [extra...]", "b"],

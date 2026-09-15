@@ -49,11 +49,13 @@ describe("ClickAdapter", () => {
       valueType: "string",
       aliases: ["-o"],
       defaultValue: null,
+      envVar: "OUTPUT_PATH",
     });
     expect(byName.tag).toMatchObject({
       required: false,
       valueType: "string",
       variadic: true,
+      envVar: undefined,
     });
     expect(contract.root.options[0]).toMatchObject({
       name: "verbose",

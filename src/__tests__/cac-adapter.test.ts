@@ -48,6 +48,9 @@ describe("CacAdapter", () => {
       defaultValue: "dist/out.js",
       aliases: ["-o"],
     });
+    // CAC has no built-in concept of binding a flag to an environment
+    // variable - always undefined, see the class's own limitations.
+    expect(byName.output.envVar).toBeUndefined();
     expect(byName.target).toMatchObject({
       valueType: "string",
       required: false,

@@ -31,6 +31,7 @@ export class CacAdapter implements CliAdapter {
     'OptionContract.required is always false - CAC has no declarative "this option must be passed" concept.',
     "CommandContract.subcommands is always [] - CAC's commands are a flat list, not a tree.",
     'ArgumentContract.description is always "" - CAC\'s positional args carry no description field.',
+    "OptionContract.envVar is always undefined - CAC has no built-in concept of satisfying a flag from an environment variable.",
   ];
 
   async extract(entryPath: string): Promise<Contract> {

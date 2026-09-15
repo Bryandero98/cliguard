@@ -1039,6 +1039,20 @@ describe("cliguard CLI (subprocess)", () => {
     }
   });
 
+  it("doctor <entry> --adapter oclif reads a real oclif manifest JSON file directly, with no subprocess", () => {
+    const { dir, cleanup } = makeTempDir();
+    const oclifManifest = path.join(__dirname, "..", "__fixtures__", "oclif-manifest.json");
+    try {
+      const { status, output } = runCli(dir, ["doctor", oclifManifest, "--adapter", "oclif"]);
+      expect(status).toBe(0);
+      expect(output).toContain("Adapter: oclif");
+      expect(output).toContain("colon-separated command ids");
+      expect(output).toContain("✅ Extraction succeeded");
+    } finally {
+      cleanup();
+    }
+  });
+
   it("doctor <entry> reports a real extraction failure instead of crashing", () => {
     const { dir, cleanup } = makeTempDir();
     try {
@@ -1482,6 +1496,29 @@ describe("cliguard CLI (subprocess)", () => {
       // eslint-disable-next-line @typescript-eslint/no-require-imports -- reading the same package.json bin.ts itself reads, to assert against the real value rather than a hardcoded copy
       const packageJson = require("../../package.json") as { version: string };
       expect(output.trim()).toBe(packageJson.version);
+    } finally {
+      cleanup();
+    }
+  });
+
+  // Deliberately doesn't exercise the "a real difference was found, go
+  // launch a diff tool" branch here: whichever machine runs this suite
+  // may genuinely have VS Code's own `code` CLI on PATH (this isn't
+  // hypothetical - it's true of the very machine this test suite was
+  // developed on), and actually invoking it would pop open a real editor
+  // window as a side effect of running `npm test` - never acceptable for
+  // an automated test. That branch (tool found vs. not, both outcomes)
+  // is covered deterministically instead in open-diff.test.ts, via an
+  // injected fake tool instead of real PATH detection.
+  it("check --open-diff is accepted and never changes the exit code or 'intact' message when nothing changed", () => {
+    const { dir, cleanup } = makeTempDir();
+    try {
+      runCli(dir, ["init", FIXTURE]);
+      const { status, output } = runCli(dir, ["check", FIXTURE, "--open-diff"]);
+      expect(status).toBe(0);
+      expect(output).toContain("CLI contract is intact.");
+      // No diff was found, so --open-diff's own branch never runs at all.
+      expect(output).not.toContain("--open-diff:");
     } finally {
       cleanup();
     }

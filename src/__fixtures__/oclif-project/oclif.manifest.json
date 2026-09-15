@@ -1,0 +1,23 @@
+{
+  "commands": {
+    "greet": {
+      "id": "greet",
+      "description": "Say hello",
+      "aliases": [],
+      "hiddenAliases": [],
+      "args": {},
+      "flags": {
+        "name": {
+          "name": "name",
+          "description": "who to greet",
+          "default": "world",
+          "multiple": false,
+          "type": "option"
+        }
+      },
+      "pluginName": "mycli",
+      "pluginType": "core"
+    }
+  },
+  "version": "1.0.0"
+}

@@ -113,6 +113,17 @@ def main():
                 "required": bool(p.required),
                 "nargs": p.nargs,
             }
+        def resolve_envvar(p):
+            # click.Option.envvar can be a single name, a list of names
+            # (first-match-wins at parse time), or None when envvar= was
+            # never passed - normalized here to "first name or None" so
+            # the TS side only ever deals with a single string or absent,
+            # matching every other adapter's OptionContract.envVar shape.
+            envvar = getattr(p, "envvar", None)
+            if isinstance(envvar, (list, tuple)):
+                return envvar[0] if envvar else None
+            return envvar
+
         return {
             "type": "Option",
             "name": p.name,
@@ -123,6 +134,7 @@ def main():
             "multiple": bool(p.multiple),
             "default": resolve_default(p),
             "help": p.help,
+            "envvar": resolve_envvar(p),
         }
 
     def dump_command(cmd, name):
@@ -156,6 +168,7 @@ interface ClickParamJson {
   readonly multiple?: boolean;
   readonly default?: unknown;
   readonly help?: string | null;
+  readonly envvar?: string | null;
   // Argument-only field:
   readonly nargs?: number;
 }
@@ -197,6 +210,7 @@ export class ClickAdapter implements CliAdapter {
     'OptionContract.valueType collapses every non-flag Click option (string, int, float, choice, path, ...) to "string" - Contract only distinguishes boolean vs. everything else, matching how CacAdapter/YargsAdapter already collapse their own richer type systems.',
     "A --flag/--no-flag paired boolean toggle surfaces as one OptionContract, same as a plain is_flag option - the negative form is only visible informationally inside `flags`, not as a separate field.",
     "Requires a `python3` or `python` on PATH with `click` installed in that same environment - unlike the JS adapters, which only need the target's own node_modules.",
+    "OptionContract.envVar only reflects an explicit `envvar=` on the option - Click's CLI-wide `auto_envvar_prefix` (which derives every option's env var implicitly from its name at parse time, never declared per-option) isn't read. When `envvar=` is a list of names, only the first is surfaced.",
   ];
 
   async extract(entryPath: string): Promise<Contract> {
@@ -287,6 +301,7 @@ export class ClickAdapter implements CliAdapter {
       valueType: param.is_flag ? "boolean" : "string",
       variadic: param.multiple ?? false,
       defaultValue: param.default ?? null,
+      envVar: param.envvar ?? undefined,
     };
   }
 

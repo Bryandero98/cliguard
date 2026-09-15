@@ -5,6 +5,30 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- `OptionContract.envVar`: tracks a flag's binding to an environment
+  variable (Commander's `.env("NAME")`, Click's `envvar=`, yargs's
+  `.env(prefix)` naming convention), wherever the target framework's own
+  adapter can detect it. `DiffEngine` now flags a removed binding as
+  BREAKING, an added one as ADDITIVE, and a renamed one as BREAKING - see
+  [RULES.md](RULES.md) for the full reasoning. CAC and the Cobra PoC have
+  no such concept, so it's always absent for those two.
+- oclif adapter (`--adapter oclif`): reads a target oclif project's own
+  `oclif.manifest.json` (generating it via `npx oclif manifest` if one
+  doesn't already exist, and cleaning up afterward) and maps it onto
+  `Contract` - no target code ever loaded in-process, unlike every other
+  adapter.
+- [RULES.md](RULES.md): every diff rule cliguard enforces, with its
+  severity and reasoning, in one place instead of only inline comments in
+  `src/core/diff.engine.ts` - linked from the README.
+- `cliguard check --open-diff`: on a real difference, writes the
+  expected/actual contracts to temp files and opens VS Code's own `code
+  --diff` on them if it's on PATH, falling back to just printing the file
+  paths otherwise. Never changes `check`'s own exit code.
+
 ## [0.7.3] - 2026-09-02
 
 ### Fixed

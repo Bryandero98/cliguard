@@ -1,0 +1,102 @@
+{
+  "commands": {
+    "build": {
+      "id": "build",
+      "description": "Build the project",
+      "aliases": ["b"],
+      "hiddenAliases": [],
+      "args": {
+        "entry": {
+          "name": "entry",
+          "description": "entry file",
+          "required": true
+        }
+      },
+      "flags": {
+        "output": {
+          "name": "output",
+          "char": "o",
+          "description": "output file path",
+          "default": "dist/out.js",
+          "multiple": false,
+          "type": "option"
+        },
+        "target": {
+          "name": "target",
+          "char": "t",
+          "description": "build target",
+          "required": true,
+          "multiple": false,
+          "type": "option"
+        },
+        "verbose": {
+          "name": "verbose",
+          "description": "verbose logging",
+          "type": "boolean"
+        },
+        "api-key": {
+          "name": "api-key",
+          "description": "API key for the deploy service",
+          "env": "API_KEY",
+          "multiple": false,
+          "type": "option"
+        },
+        "tag": {
+          "name": "tag",
+          "description": "tag to attach",
+          "multiple": true,
+          "type": "option"
+        }
+      },
+      "pluginName": "mycli",
+      "pluginType": "core"
+    },
+    "config:get": {
+      "id": "config:get",
+      "description": "Get a config value",
+      "aliases": [],
+      "hiddenAliases": [],
+      "args": {
+        "key": {
+          "name": "key",
+          "description": "config key",
+          "required": true
+        }
+      },
+      "flags": {},
+      "pluginName": "mycli",
+      "pluginType": "core"
+    },
+    "config:set": {
+      "id": "config:set",
+      "description": "Set a config value",
+      "aliases": [],
+      "hiddenAliases": [],
+      "args": {
+        "key": {
+          "name": "key",
+          "description": "config key",
+          "required": true
+        },
+        "value": {
+          "name": "value",
+          "description": "new value",
+          "required": true
+        }
+      },
+      "flags": {
+        "env": {
+          "name": "env",
+          "description": "target environment",
+          "default": "staging",
+          "options": ["staging", "prod"],
+          "multiple": false,
+          "type": "option"
+        }
+      },
+      "pluginName": "mycli",
+      "pluginType": "core"
+    }
+  },
+  "version": "1.0.0"
+}

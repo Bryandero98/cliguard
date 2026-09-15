@@ -1,8 +1,9 @@
 # A real Click program used as test input for ClickAdapter - exercises a
 # root group with its own option, a nested group (group inside a group),
-# a required option, a repeatable ("multiple") option, a required
-# positional argument, a variadic positional argument, and a choice
-# option with a default.
+# a required option, a repeatable ("multiple") option, an option bound to
+# an environment variable via Click's own envvar=, a required positional
+# argument, a variadic positional argument, and a choice option with a
+# default.
 import click
 
 
@@ -13,7 +14,7 @@ def cli(verbose):
 
 
 @cli.command(help="Build the project")
-@click.option("--output", "-o", required=True, help="Output path")
+@click.option("--output", "-o", required=True, envvar="OUTPUT_PATH", help="Output path")
 @click.option("--tag", multiple=True, help="Tag to attach")
 @click.argument("target", required=True)
 @click.argument("extra", required=False, nargs=-1)

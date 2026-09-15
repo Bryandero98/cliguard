@@ -3,6 +3,7 @@ import { CacAdapter } from "./cac.adapter";
 import { ClickAdapter } from "./click.adapter";
 import { CobraAdapter } from "./cobra.adapter";
 import { CommanderAdapter } from "./commander.adapter";
+import { OclifAdapter } from "./oclif.adapter";
 import { YargsAdapter } from "./yargs.adapter";
 
 // Constructing an adapter here is cheap (no eager require of its
@@ -18,6 +19,7 @@ export const adapters: Readonly<Record<string, CliAdapter>> = {
   yargs: new YargsAdapter(),
   click: new ClickAdapter(),
   cobra: new CobraAdapter(),
+  oclif: new OclifAdapter(),
 };
 
 export function resolveAdapter(name: string): CliAdapter {

@@ -25,6 +25,15 @@ interface YargsOptions {
   readonly alias: Readonly<Record<string, readonly string[]>>;
   readonly default: Readonly<Record<string, unknown>>;
   readonly demandedOptions: Readonly<Record<string, unknown>>;
+  /**
+   * Set by `.env(prefix)` (a string prefix, or `true`/`''` for none) -
+   * `undefined` when `.env()` was never called. Yargs itself only stores
+   * this at the top-level instance's own options bag (see this adapter's
+   * `mapRoot`), never per-command - so it's threaded down explicitly to
+   * every subcommand's own `mapOptions` call rather than re-read from each
+   * fresh, isolated sub-instance (which never had `.env()` called on it).
+   */
+  readonly envPrefix?: string | boolean;
 }
 
 interface YargsPositional {
@@ -89,6 +98,7 @@ export class YargsAdapter implements CliAdapter {
   readonly id = "yargs";
   readonly limitations: readonly string[] = [
     "Each command's options are read from a fresh, isolated yargs instance built by re-running that command's builder, not the shared instance the target CLI actually built - see this class's own doc comment for why.",
+    "OptionContract.envVar is reconstructed from yargs's own `.env(prefix)` naming convention (PREFIX_OPTION_NAME), not read from a per-option declaration the way Commander's `.env(\"NAME\")` is - a name using yargs-parser's `__` nested-key separator won't round-trip correctly.",
   ];
 
   async extract(entryPath: string): Promise<Contract> {
@@ -263,15 +273,20 @@ export class YargsAdapter implements CliAdapter {
     const commandInstance = cli.getInternalMethods().getCommandInstance();
     const options = cli.getOptions();
     const descriptions = cli.getInternalMethods().getUsageInstance().getDescriptions();
+    // `.env()` is only ever set on the real, shared top-level instance -
+    // every subcommand's own options are read from a fresh, isolated
+    // instance further down (see mapCommand) that never had it called, so
+    // this is captured here once and threaded down explicitly instead.
+    const envPrefix = options.envPrefix;
 
     return {
       name: cli.$0,
       description: "",
       aliases: [],
-      options: this.mapOptions(options, descriptions, new Set()),
+      options: this.mapOptions(options, descriptions, new Set(), envPrefix),
       arguments: [],
       subcommands: Object.entries(commandInstance.handlers).map(([name, handler]) =>
-        this.mapCommand(name, handler, commandInstance.aliasMap),
+        this.mapCommand(name, handler, commandInstance.aliasMap, envPrefix),
       ),
     };
   }
@@ -290,6 +305,7 @@ export class YargsAdapter implements CliAdapter {
     name: string,
     handler: YargsCommandHandler,
     parentAliasMap: Readonly<Record<string, string>>,
+    envPrefix: string | boolean | undefined,
   ): CommandContract {
     const scoped = this.freshInstance();
 
@@ -311,10 +327,10 @@ export class YargsAdapter implements CliAdapter {
       aliases: Object.entries(parentAliasMap)
         .filter(([, canonical]) => canonical === name)
         .map(([alias]) => alias),
-      options: this.mapOptions(options, descriptions, positionalNames),
+      options: this.mapOptions(options, descriptions, positionalNames, envPrefix),
       arguments: this.mapArguments(handler, descriptions),
       subcommands: Object.entries(commandInstance.handlers).map(([subName, subHandler]) =>
-        this.mapCommand(subName, subHandler, commandInstance.aliasMap),
+        this.mapCommand(subName, subHandler, commandInstance.aliasMap, envPrefix),
       ),
     };
   }
@@ -358,6 +374,7 @@ export class YargsAdapter implements CliAdapter {
     options: YargsOptions,
     descriptions: Readonly<Record<string, string>>,
     positionalNames: ReadonlySet<string>,
+    envPrefix: string | boolean | undefined,
   ): OptionContract[] {
     const aliasTargets = new Set(Object.values(options.alias).flat());
     const allNames = new Set([
@@ -383,7 +400,31 @@ export class YargsAdapter implements CliAdapter {
         valueType: this.inferValueType(options, name),
         variadic: options.array.includes(name),
         defaultValue: name in options.default ? options.default[name] : null,
+        envVar: this.deriveEnvVar(envPrefix, name),
       }));
+  }
+
+  /**
+   * Yargs has no *per-option* declared env var name (unlike Commander's
+   * `.env("NAME")`) - `.env(prefix)` instead turns on a blanket naming
+   * convention for every option at once, applied at real parse time by
+   * yargs-parser's own `applyEnvVars` (see yargs-parser's
+   * `yargs-parser.js`): an env var matching `<PREFIX_><NAME>` (uppercased,
+   * `-`/camelCase boundaries as `_`) satisfies the option named `<name>`
+   * unless the value was already supplied another way. This reconstructs
+   * that same name from the option side - the exact inverse of
+   * yargs-parser's own camelCase decoding - so it's a real, verified
+   * convention, not a guess. Returns `undefined` when `.env()` was never
+   * called, matching every other adapter's "no binding" shape.
+   */
+  private deriveEnvVar(envPrefix: string | boolean | undefined, name: string): string | undefined {
+    if (envPrefix === undefined || envPrefix === false) return undefined;
+    const prefix = typeof envPrefix === "string" ? envPrefix : "";
+    const decamelized = name
+      .replace(/-/g, "_")
+      .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
+      .toUpperCase();
+    return prefix ? `${prefix}_${decamelized}` : decamelized;
   }
 
   private describe(descriptions: Readonly<Record<string, string>>, name: string): string {

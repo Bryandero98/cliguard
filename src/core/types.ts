@@ -24,6 +24,21 @@ export interface OptionContract {
   readonly variadic: boolean;
   /** JSON-serializable default, or null if the framework declared none. */
   readonly defaultValue: unknown;
+  /**
+   * Name of the environment variable that can also satisfy this flag (e.g.
+   * Commander's `.env("BUILD_TARGET")`, Click's `envvar="BUILD_TARGET"`,
+   * yargs's `.env(prefix)` convention), or `undefined` if the framework
+   * declared none - never guessed from a description or naming convention
+   * the framework itself doesn't actually apply. A maintainer renaming or
+   * removing this binding is a real, otherwise-invisible breaking change:
+   * existing invocations that rely on the env var (and never pass the
+   * flag directly) silently stop working. Omitted entirely (rather than
+   * `null`) for a framework/option that has no such binding, matching how
+   * TypeScript's own `?:` already distinguishes "never applicable" from
+   * "explicitly none" - unlike `defaultValue`, which every option always
+   * has an answer for (even if that answer is "none").
+   */
+  readonly envVar?: string;
 }
 
 export interface ArgumentContract {

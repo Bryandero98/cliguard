@@ -9,6 +9,7 @@
     "commander",
     "yargs",
     "click",
+    "oclif",
     "ci"
   ],
   "author": "Bryandero98",

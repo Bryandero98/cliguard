@@ -29,6 +29,18 @@ describe("YargsAdapter", () => {
     ]);
   });
 
+  it("derives every option's env var name from .env(prefix) using yargs's own PREFIX_OPTION_NAME convention", async () => {
+    const adapter = new YargsAdapter();
+    const contract = await adapter.extract(FIXTURE);
+    const build = contract.root.subcommands[0];
+    const byName = Object.fromEntries(build.options.map((o) => [o.name, o]));
+
+    expect(contract.root.options[0]).toMatchObject({ name: "config", envVar: "MYCLI_CONFIG" });
+    expect(byName.output).toMatchObject({ envVar: "MYCLI_OUTPUT" });
+    expect(byName.target).toMatchObject({ envVar: "MYCLI_TARGET" });
+    expect(byName.verbose).toMatchObject({ envVar: "MYCLI_VERBOSE" });
+  });
+
   it("maps positional arguments, including required and variadic", async () => {
     const adapter = new YargsAdapter();
     const contract = await adapter.extract(FIXTURE);
@@ -88,7 +100,10 @@ describe("YargsAdapter", () => {
     expect(contract.root.name).toBe("mycli");
     expect(contract.root.subcommands).toHaveLength(1);
     expect(contract.root.subcommands[0].name).toBe("build");
-    expect(contract.root.subcommands[0].options[0]).toMatchObject({ name: "target" });
+    expect(contract.root.subcommands[0].options[0]).toMatchObject({
+      name: "target",
+      envVar: undefined,
+    });
   });
 
   it("throws a clear error when no yargs instance is exported", async () => {
