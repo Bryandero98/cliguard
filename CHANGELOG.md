@@ -5,10 +5,21 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.8.0] - 2026-09-15
 
 ### Added
 
+- `cliguard check --webhook <url>` / `CLIGUARD_WEBHOOK_URL`: POSTs the
+  `DiffResult[]` from a run (plus the entry file and repo/commit) to a
+  configurable webhook URL as JSON, via native `fetch` - no new
+  dependency. A 5s timeout and a failed POST only print a warning to
+  stderr; neither ever changes `check`'s own exit code. First building
+  block toward a hosted, shareable diff view - see #11.
+- Cobra (Go) adapter (`--adapter cobra`), shipped as a proof of concept
+  under `examples/cobra-dump/`: demonstrates the same subprocess+JSON
+  pattern the Click adapter already uses, applied to a compiled binary
+  instead of an in-process object. Not yet a published `cliguard-go`
+  package - see #9 for what's still open before it is.
 - `OptionContract.envVar`: tracks a flag's binding to an environment
   variable (Commander's `.env("NAME")`, Click's `envvar=`, yargs's
   `.env(prefix)` naming convention), wherever the target framework's own
