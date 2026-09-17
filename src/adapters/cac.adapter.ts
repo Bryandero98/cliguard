@@ -9,6 +9,7 @@ import type { CommandContract, Contract, OptionContract, OptionValueType } from 
 import type { CliAdapter } from "./adapter.interface";
 import { captureConstructions } from "./construction-capture";
 import { loadModule } from "./load-module";
+import { dashPrefix } from "./option-helpers";
 
 /**
  * Extracts a Contract from a target file that exports a `cac()` `CAC`
@@ -178,7 +179,7 @@ export class CacAdapter implements CliAdapter {
       name: option.name,
       aliases: option.names
         .filter((name) => name !== option.name)
-        .map((name) => this.dashPrefix(name)),
+        .map((name) => dashPrefix(name)),
       description: option.description,
       // CAC has no declarative "must be passed" concept - see class doc.
       required: false,
@@ -189,11 +190,6 @@ export class CacAdapter implements CliAdapter {
       variadic: false,
       defaultValue: option.config.default ?? null,
     };
-  }
-
-  /** `-x` for a single-character name, `--xray` otherwise - CAC's own `.names` carries neither dash. */
-  private dashPrefix(name: string): string {
-    return name.length === 1 ? `-${name}` : `--${name}`;
   }
 
   /** `isBoolean` is CAC's own flag for a valueless option; anything else declared a value (`<x>` required or `[x]` optional). */

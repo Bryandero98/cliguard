@@ -3,7 +3,13 @@ import { Command } from "commander";
 import { basename, relative, resolve } from "path";
 
 import { adapters, resolveAdapter } from "./adapters/registry";
-import { applyConfig, loadConfig, resolveTargets, type ResolvedTarget } from "./core/config";
+import {
+  applyConfig,
+  loadConfig,
+  resolveTargets,
+  type CliguardConfig,
+  type ResolvedTarget,
+} from "./core/config";
 import { DiffEngine, type DiffResult } from "./core/diff.engine";
 import { renderMarkdownDocs } from "./core/docs";
 import { detectDiffTool, openDiffInEditor } from "./core/open-diff";
@@ -34,6 +40,7 @@ import {
   ChangeType,
   type AcceptedBreak,
   type CommandContract,
+  type Contract,
   type Deprecation,
 } from "./core/types";
 
@@ -78,6 +85,16 @@ function resolveTargetsOrExit(entry: string | undefined, cliAdapter: string): Re
  * overall exit code is 1 if ANY target's own action returned non-zero,
  * matching `check`'s existing "any BREAKING change fails the build"
  * semantics extended across targets instead of options/arguments.
+ *
+ * Deliberately sequential, not `Promise.all` - every in-process JS adapter's
+ * `extract()` monkey-patches shared, process-wide state (a `Proxy` installed
+ * on the target framework's `require.cache` entry, see
+ * adapters/construction-capture.ts) while it loads the target. Two targets
+ * that resolve the same framework package to the same path (plausible in a
+ * monorepo sharing one node_modules) would have overlapping capture windows
+ * if run concurrently, and one target's constructed CLI instance could get
+ * recorded into the other's results. Keep this a `for` loop until that
+ * capture is scoped per-call instead of per-module-cache-entry.
  */
 async function runAcrossTargets(
   targets: readonly ResolvedTarget[],
@@ -234,16 +251,12 @@ program
             ? readContractAtRef(options.against, target.namespace)
             : readContract(target.namespace);
           const newContract = await resolveAdapter(target.adapter).extract(target.entry);
-          const diff = applyDeprecations(
-            diffEngine.applyUnstableMarkers(
-              applyConfig(
-                diffEngine.compare(oldContract, newContract, { strict: options.strict }),
-                loadConfig(),
-              ),
-              oldContract,
-              newContract,
-            ),
-            indexDeprecations(readDeprecations(target.namespace)),
+          const diff = computeDiff(
+            oldContract,
+            newContract,
+            loadConfig(),
+            target.namespace,
+            options.strict,
           );
           const acceptedPaths = indexAcceptedBreaks(readAcceptedBreaks(target.namespace));
           const hasBreaking = diff.some(
@@ -331,16 +344,12 @@ program
 
           const oldContract = readContract(target.namespace);
           const newContract = await resolveAdapter(target.adapter).extract(target.entry);
-          const diff = applyDeprecations(
-            diffEngine.applyUnstableMarkers(
-              applyConfig(
-                diffEngine.compare(oldContract, newContract, { strict: options.strict }),
-                loadConfig(),
-              ),
-              oldContract,
-              newContract,
-            ),
-            indexDeprecations(readDeprecations(target.namespace)),
+          const diff = computeDiff(
+            oldContract,
+            newContract,
+            loadConfig(),
+            target.namespace,
+            options.strict,
           );
           const match = diff.find(
             (change) => change.type === ChangeType.BREAKING && change.path === changePath,
@@ -630,17 +639,7 @@ program
 
       const oldContract = readContractFile(oldPath);
       const newContract = readContractFile(newPath);
-      const diff = applyDeprecations(
-        diffEngine.applyUnstableMarkers(
-          applyConfig(
-            diffEngine.compare(oldContract, newContract, { strict: options.strict }),
-            loadConfig(),
-          ),
-          oldContract,
-          newContract,
-        ),
-        indexDeprecations(readDeprecations()),
-      );
+      const diff = computeDiff(oldContract, newContract, loadConfig(), null, options.strict);
       const acceptedPaths = indexAcceptedBreaks(readAcceptedBreaks());
       const hasBreaking = diff.some(
         (change) => change.type === ChangeType.BREAKING && !acceptedPaths.has(change.path),
@@ -788,6 +787,28 @@ function indexAcceptedBreaks(
 
 function indexDeprecations(deprecations: readonly Deprecation[]): ReadonlyMap<string, Deprecation> {
   return new Map(deprecations.map((entry) => [entry.path, entry]));
+}
+
+/**
+ * The full diff pipeline every command runs: compare -> apply config overrides ->
+ * apply unstable markers -> fold in acknowledged deprecations. Shared so a new
+ * pipeline stage (there have already been three) only has to be added in one place.
+ */
+function computeDiff(
+  oldContract: Contract,
+  newContract: Contract,
+  config: CliguardConfig,
+  namespace: string | null,
+  strict: boolean,
+): DiffResult[] {
+  return applyDeprecations(
+    diffEngine.applyUnstableMarkers(
+      applyConfig(diffEngine.compare(oldContract, newContract, { strict }), config),
+      oldContract,
+      newContract,
+    ),
+    indexDeprecations(readDeprecations(namespace)),
+  );
 }
 
 /**

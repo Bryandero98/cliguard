@@ -9,6 +9,7 @@ import type {
 } from "../core/types";
 import type { CliAdapter } from "./adapter.interface";
 import { loadModule } from "./load-module";
+import { dashPrefix } from "./option-helpers";
 
 /**
  * The slice of yargs's own (semi-public, but real and stable since 15.x)
@@ -391,10 +392,10 @@ export class YargsAdapter implements CliAdapter {
       .map((name) => ({
         flags: [
           `--${name}`,
-          ...(options.alias[name] ?? []).map((alias) => this.dashPrefix(alias)),
+          ...(options.alias[name] ?? []).map((alias) => dashPrefix(alias)),
         ].join(", "),
         name,
-        aliases: (options.alias[name] ?? []).map((alias) => this.dashPrefix(alias)),
+        aliases: (options.alias[name] ?? []).map((alias) => dashPrefix(alias)),
         description: this.describe(descriptions, name),
         required: name in options.demandedOptions,
         valueType: this.inferValueType(options, name),
@@ -430,11 +431,6 @@ export class YargsAdapter implements CliAdapter {
   private describe(descriptions: Readonly<Record<string, string>>, name: string): string {
     const raw = descriptions[name] ?? "";
     return raw.startsWith(YARGS_STRING_MARKER) ? raw.slice(YARGS_STRING_MARKER.length) : raw;
-  }
-
-  /** `-x` for a single-character name, `--xray` otherwise - yargs's own alias lists carry neither dash. */
-  private dashPrefix(name: string): string {
-    return name.length === 1 ? `-${name}` : `--${name}`;
   }
 
   /** Everything not declared `boolean`/`array`/`number` defaults to yargs's own "string" bucket - collapsed to this Contract's two-value OptionValueType the same way CacAdapter does. */

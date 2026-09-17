@@ -20,6 +20,23 @@ function targetPath(namespace: string | null, fileName: string): string {
   return join(CLIGUARD_DIR, namespace ?? "", fileName);
 }
 
+/**
+ * `subject` is the already-quoted, already-formatted description of what's being
+ * parsed (e.g. `"path/to/file.json"`, or `"path" at ref "main"`) - this only owns
+ * the "is not valid JSON (<reason>)" part every caller shares, plus an optional
+ * trailing fix-it hint specific to that file.
+ */
+function parseJsonOrThrow<T>(raw: string, subject: string, hint?: string): T {
+  try {
+    return JSON.parse(raw) as T;
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `cliguard: ${subject} is not valid JSON (${reason}).${hint ? ` ${hint}` : ""}`,
+    );
+  }
+}
+
 /** Contract path relative to cwd, normalized to forward slashes - display only, never used for I/O. */
 export function getContractDisplayPath(namespace: string | null = null): string {
   return relative(process.cwd(), targetPath(namespace, "contract.json")).split("\\").join("/");
@@ -44,22 +61,16 @@ export function readContract(namespace: string | null = null): Contract {
     );
   }
   const raw = readFileSync(contractPath, "utf-8");
-  try {
-    return JSON.parse(raw) as Contract;
-  } catch (error) {
-    // A bare JSON.parse error ("Unexpected token..." with no file
-    // context) reads as an internal cliguard bug, not "your committed
-    // contract file is corrupted" - which is the actual, fixable cause
-    // (a bad manual edit, a botched merge). Naming the file and the
-    // fix (re-run init/update) turns a confusing crash into an
-    // actionable message.
-    const reason = error instanceof Error ? error.message : String(error);
-    throw new Error(
-      `cliguard: "${getContractDisplayPath(namespace)}" is not valid JSON (${reason}). ` +
-        "If this file was hand-edited or came out of a bad merge, re-run " +
-        "`cliguard update <entry.js>` to regenerate it.",
-    );
-  }
+  // A bare JSON.parse error ("Unexpected token..." with no file context) reads
+  // as an internal cliguard bug, not "your committed contract file is
+  // corrupted" - which is the actual, fixable cause (a bad manual edit, a
+  // botched merge). Naming the file and the fix (re-run init/update) turns a
+  // confusing crash into an actionable message.
+  return parseJsonOrThrow<Contract>(
+    raw,
+    `"${getContractDisplayPath(namespace)}"`,
+    "If this file was hand-edited or came out of a bad merge, re-run `cliguard update <entry.js>` to regenerate it.",
+  );
 }
 
 export function writeContract(contract: Contract, namespace: string | null = null): void {
@@ -81,12 +92,7 @@ export function readContractFile(path: string, displayPath: string = path): Cont
     throw new Error(`cliguard: no such file: "${displayPath}".`);
   }
   const raw = readFileSync(path, "utf-8");
-  try {
-    return JSON.parse(raw) as Contract;
-  } catch (error) {
-    const reason = error instanceof Error ? error.message : String(error);
-    throw new Error(`cliguard: "${displayPath}" is not valid JSON (${reason}).`);
-  }
+  return parseJsonOrThrow<Contract>(raw, `"${displayPath}"`);
 }
 
 /**
@@ -118,14 +124,7 @@ export function readContractAtRef(ref: string, namespace: string | null = null):
     );
   }
 
-  try {
-    return JSON.parse(raw) as Contract;
-  } catch (error) {
-    const reason = error instanceof Error ? error.message : String(error);
-    throw new Error(
-      `cliguard: "${contractGitPath}" at ref "${ref}" is not valid JSON (${reason}).`,
-    );
-  }
+  return parseJsonOrThrow<Contract>(raw, `"${contractGitPath}" at ref "${ref}"`);
 }
 
 /** Unlike readContract, a missing file is normal (most projects never accept a break) - returns [] rather than throwing. */
@@ -133,18 +132,13 @@ export function readAcceptedBreaks(namespace: string | null = null): AcceptedBre
   const acceptedBreaksPath = targetPath(namespace, "accepted-breaks.json");
   if (!existsSync(acceptedBreaksPath)) return [];
   const raw = readFileSync(acceptedBreaksPath, "utf-8");
-  try {
-    return JSON.parse(raw) as AcceptedBreak[];
-  } catch (error) {
-    // See readContract's identical-purpose catch for why naming the file
-    // and the fix matters here too.
-    const reason = error instanceof Error ? error.message : String(error);
-    throw new Error(
-      `cliguard: "${getAcceptedBreaksDisplayPath(namespace)}" is not valid JSON (${reason}). ` +
-        "If this file was hand-edited or came out of a bad merge, fix it or delete it " +
-        "and re-run `cliguard accept` for whatever was in it.",
-    );
-  }
+  // See readContract's identical-purpose catch for why naming the file and
+  // the fix matters here too.
+  return parseJsonOrThrow<AcceptedBreak[]>(
+    raw,
+    `"${getAcceptedBreaksDisplayPath(namespace)}"`,
+    "If this file was hand-edited or came out of a bad merge, fix it or delete it and re-run `cliguard accept` for whatever was in it.",
+  );
 }
 
 export function writeAcceptedBreaks(
@@ -166,16 +160,11 @@ export function readDeprecations(namespace: string | null = null): Deprecation[]
   const deprecationsPath = targetPath(namespace, "deprecations.json");
   if (!existsSync(deprecationsPath)) return [];
   const raw = readFileSync(deprecationsPath, "utf-8");
-  try {
-    return JSON.parse(raw) as Deprecation[];
-  } catch (error) {
-    const reason = error instanceof Error ? error.message : String(error);
-    throw new Error(
-      `cliguard: "${getDeprecationsDisplayPath(namespace)}" is not valid JSON (${reason}). ` +
-        "If this file was hand-edited or came out of a bad merge, fix it or delete it " +
-        "and re-run `cliguard deprecate` for whatever was in it.",
-    );
-  }
+  return parseJsonOrThrow<Deprecation[]>(
+    raw,
+    `"${getDeprecationsDisplayPath(namespace)}"`,
+    "If this file was hand-edited or came out of a bad merge, fix it or delete it and re-run `cliguard deprecate` for whatever was in it.",
+  );
 }
 
 export function writeDeprecations(
