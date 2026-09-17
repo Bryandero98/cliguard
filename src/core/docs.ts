@@ -8,9 +8,12 @@ import type { ArgumentContract, CommandContract, Contract, OptionContract } from
  * render; nothing here reads a live CLI or a specific adapter.
  *
  * The point of generating this from the Contract rather than hand-writing
- * it: the moment the docs would go stale, `check` already fails CI for the
- * same underlying reason (the CLI's surface changed) - these docs literally
- * cannot drift from reality without cliguard itself catching it first.
+ * it: it's driven by the same data `check` diffs, so it's a single source
+ * of truth. That said, `check`'s exit code only reacts to BREAKING changes
+ * (see bin.ts) - an ADDITIVE or PATCH surface change (a new optional flag,
+ * a tweaked help string) leaves `check` green while these docs go stale
+ * unless the project *also* runs `cliguard docs --check` in CI. Wiring
+ * that up is what actually closes the drift gap; `check` alone doesn't.
  */
 export function renderMarkdownDocs(contract: Contract, fallbackTitle: string): string {
   const title = contract.root.name || fallbackTitle;

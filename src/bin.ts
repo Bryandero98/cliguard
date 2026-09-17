@@ -265,13 +265,20 @@ program
 
           if (options.openDiff && diff.length > 0) {
             const opened = openDiffInEditor(oldContract, newContract, detectDiffTool());
-            console.log(
-              opened.openedWith
-                ? `🔍 --open-diff: opened ${opened.openedWith} --diff on the expected vs. actual contract.`
-                : "ℹ️  --open-diff: no supported editor found on PATH - contracts written to:\n" +
-                    `   expected: ${opened.oldPath}\n` +
-                    `   actual:   ${opened.newPath}`,
-            );
+            if (!opened) {
+              console.warn(
+                "⚠️  --open-diff: couldn't write the temp files to compare (disk full or " +
+                  "unwritable temp dir) - skipping, the rest of this command's result is unaffected.",
+              );
+            } else {
+              console.log(
+                opened.openedWith
+                  ? `🔍 --open-diff: opened ${opened.openedWith} --diff on the expected vs. actual contract.`
+                  : "ℹ️  --open-diff: no supported editor found on PATH - contracts written to:\n" +
+                      `   expected: ${opened.oldPath}\n` +
+                      `   actual:   ${opened.newPath}`,
+              );
+            }
           }
 
           if (webhookUrl) {
@@ -861,7 +868,7 @@ interface JsonCheckResult {
   readonly suggestedBump: SuggestedBump;
 }
 
-/** A BREAKING entry matched by `cliguard accept` gains `acknowledged: true` and its recorded `reason`; every other entry passes through unchanged. Shared by --json, --format junit, and --format gitlab-codequality so all three agree on what "acknowledged" means. */
+/** A BREAKING entry matched by `cliguard accept` gains `acknowledged: true` and its recorded `reason`; every other entry passes through unchanged. Shared by --json, --format junit, --format gitlab-codequality, and --format rdjsonl so all four agree on what "acknowledged" means. */
 function annotateChanges(
   diff: readonly DiffResult[],
   acceptedPaths: ReadonlyMap<string, AcceptedBreak>,

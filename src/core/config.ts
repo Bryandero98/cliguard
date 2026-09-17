@@ -22,7 +22,7 @@ export interface CliguardConfig {
   readonly ignore?: readonly (string | RegExp)[];
   /** A change whose DiffResult.path matches `pattern` gets reclassified to `severity` - the first matching entry wins. */
   readonly severityOverrides?: readonly SeverityOverride[];
-  /** A monorepo's CLI entry points - `init`/`check`/`update`/`accept` run against every target when no entry is given on the command line, or against just one by passing its `name` in place of an entry path. An explicit file-path entry always keeps working exactly as it does today, config or no config - see resolveTargets. */
+  /** A monorepo's CLI entry points - `init`/`check`/`update`/`accept` run against every target when no entry is given on the command line, or against just one by passing its `name` in place of an entry path. An explicit file-path entry that matches no target's name always *resolves* exactly as it does with no config at all (see resolveTargets) - but this config's own `ignore`/`severityOverrides` still apply to it, since every command applies the whole loaded config regardless of how the target was resolved. */
   readonly targets?: readonly ConfigTarget[];
 }
 

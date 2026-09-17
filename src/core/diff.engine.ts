@@ -24,11 +24,13 @@ export interface CompareOptions {
   /**
    * Enables extra rules for changes that are currently silent (no diff
    * entry at all) but can still break an existing caller - today, only a
-   * pure reorder of a command's positional arguments (same names, same
-   * required/variadic shape, different sequence), which the default,
-   * name-indexed comparison can't see since it never looks at position.
-   * Off by default so existing callers/CI configs keep today's behavior
-   * exactly - this is opt-in stricter enforcement, not a bug fix.
+   * reorder of a command's positional arguments (same set of names,
+   * different sequence - required/variadic shape isn't part of this
+   * check, and is reported separately by the normal per-name comparison
+   * if it also changed), which the default, name-indexed comparison can't
+   * see since it never looks at position. Off by default so existing
+   * callers/CI configs keep today's behavior exactly - this is opt-in
+   * stricter enforcement, not a bug fix.
    */
   readonly strict?: boolean;
 }
@@ -446,12 +448,15 @@ export class DiffEngine {
 
   /**
    * `--strict`-only: positional arguments are matched by name everywhere
-   * above, so a pure reorder (same names, same shape, different sequence)
-   * produces no diff at all under the default rules - but position is
-   * exactly what a caller passing values positionally relies on, so it's
-   * a real, silent break. Only fires when the two argument lists are the
-   * same *set* of names (any actual add/remove is already reported by the
-   * per-name loop above; this would just be redundant noise on top of it).
+   * above, so a reorder (same set of names, different sequence) produces
+   * no diff at all under the default rules - but position is exactly what
+   * a caller passing values positionally relies on, so it's a real, silent
+   * break. Only fires when the two argument lists are the same *set* of
+   * names (any actual add/remove is already reported by the per-name loop
+   * above; this would just be redundant noise on top of it) - note this
+   * checks names only, not required/variadic shape, so a reorder that also
+   * changes an argument's shape fires both this message and the per-name
+   * loop's own shape-change message for the same path.
    */
   private compareArgumentOrder(
     oldArgs: readonly ArgumentContract[],

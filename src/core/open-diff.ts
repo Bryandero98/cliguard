@@ -59,18 +59,28 @@ export interface OpenDiffResult {
  * immediately with its normal code instead of waiting on the editor
  * window to close. Never throws: a tool that fails to actually launch
  * still leaves both files on disk, which is all the caller falls back to
- * printing anyway.
+ * printing anyway. Returns `undefined` (rather than throwing) if the temp
+ * directory/files themselves couldn't be written - an unwritable/full temp
+ * dir shouldn't crash the command that was just about to report a real
+ * diff result over this purely-optional convenience.
  */
 export function openDiffInEditor(
   oldContract: Contract,
   newContract: Contract,
   tool: DiffTool | undefined,
-): OpenDiffResult {
-  const dir = mkdtempSync(join(tmpdir(), "cliguard-diff-"));
-  const oldPath = join(dir, "expected.contract.json");
-  const newPath = join(dir, "actual.contract.json");
-  writeFileSync(oldPath, JSON.stringify(oldContract, null, 2) + "\n");
-  writeFileSync(newPath, JSON.stringify(newContract, null, 2) + "\n");
+): OpenDiffResult | undefined {
+  let dir: string;
+  let oldPath: string;
+  let newPath: string;
+  try {
+    dir = mkdtempSync(join(tmpdir(), "cliguard-diff-"));
+    oldPath = join(dir, "expected.contract.json");
+    newPath = join(dir, "actual.contract.json");
+    writeFileSync(oldPath, JSON.stringify(oldContract, null, 2) + "\n");
+    writeFileSync(newPath, JSON.stringify(newContract, null, 2) + "\n");
+  } catch {
+    return undefined;
+  }
 
   if (!tool) return { oldPath, newPath };
 

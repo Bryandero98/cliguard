@@ -10,7 +10,7 @@ export interface WebhookChange {
 }
 
 export interface WebhookPayload {
-  /** The entry file (or config target name) `check` ran against. */
+  /** The entry file `check` ran against - always the resolved file path, even for a named `cliguard.config.js` target (resolveTargets swaps the name for its `entry` before this is built). */
   readonly entry: string;
   /** `git config --get remote.origin.url`, or null outside a git repo / with no origin configured. */
   readonly repo: string | null;
