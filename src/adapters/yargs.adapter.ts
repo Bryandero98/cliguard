@@ -390,10 +390,9 @@ export class YargsAdapter implements CliAdapter {
       .filter((name) => !positionalNames.has(name))
       .filter((name) => !aliasTargets.has(name))
       .map((name) => ({
-        flags: [
-          `--${name}`,
-          ...(options.alias[name] ?? []).map((alias) => dashPrefix(alias)),
-        ].join(", "),
+        flags: [`--${name}`, ...(options.alias[name] ?? []).map((alias) => dashPrefix(alias))].join(
+          ", ",
+        ),
         name,
         aliases: (options.alias[name] ?? []).map((alias) => dashPrefix(alias)),
         description: this.describe(descriptions, name),

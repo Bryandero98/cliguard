@@ -47,7 +47,8 @@ describe("openDiffInEditor", () => {
     });
 
     const result = openDiffInEditor(oldContract, newContract, undefined);
-    if (!result) throw new Error("expected openDiffInEditor to succeed - temp dir should be writable in CI");
+    if (!result)
+      throw new Error("expected openDiffInEditor to succeed - temp dir should be writable in CI");
 
     expect(result.openedWith).toBeUndefined();
     expect(existsSync(result.oldPath)).toBe(true);
@@ -71,7 +72,8 @@ describe("openDiffInEditor", () => {
     };
 
     const result = openDiffInEditor(oldContract, newContract, fakeTool);
-    if (!result) throw new Error("expected openDiffInEditor to succeed - temp dir should be writable in CI");
+    if (!result)
+      throw new Error("expected openDiffInEditor to succeed - temp dir should be writable in CI");
 
     expect(result.openedWith).toBe(fakeTool.command);
     expect(existsSync(result.oldPath)).toBe(true);
@@ -81,7 +83,8 @@ describe("openDiffInEditor", () => {
     const contract = makeContract();
     const first = openDiffInEditor(contract, contract, undefined);
     const second = openDiffInEditor(contract, contract, undefined);
-    if (!first || !second) throw new Error("expected openDiffInEditor to succeed - temp dir should be writable in CI");
+    if (!first || !second)
+      throw new Error("expected openDiffInEditor to succeed - temp dir should be writable in CI");
 
     expect(first.oldPath).not.toBe(second.oldPath);
   });

@@ -177,9 +177,7 @@ export class CacAdapter implements CliAdapter {
     return {
       flags: option.rawName,
       name: option.name,
-      aliases: option.names
-        .filter((name) => name !== option.name)
-        .map((name) => dashPrefix(name)),
+      aliases: option.names.filter((name) => name !== option.name).map((name) => dashPrefix(name)),
       description: option.description,
       // CAC has no declarative "must be passed" concept - see class doc.
       required: false,
